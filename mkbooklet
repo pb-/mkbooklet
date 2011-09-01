@@ -1,0 +1,108 @@
+#!/usr/bin/python
+
+import subprocess
+import pyPdf
+import sys
+import os
+import tempfile
+import shutil
+
+# adjust these if you want (unit: postscript points)
+margins = 15
+foldmargin = 100
+
+
+
+if len(sys.argv) < 2:
+	print 'usage: %s PDF-FILE' % sys.argv[0]
+	sys.exit(-1)
+
+# A4 in postscript points: 841 x 595 
+a4lheight = 595
+a4lwidth = 841
+
+pdf_in = sys.argv[1]
+
+
+
+
+# determine actual (printed) bounding box
+proc = subprocess.Popen(["/usr/bin/gs", "-sDEVICE=bbox", "-dBATCH", "-dNOPAUSE", "-c", "save", "pop", "-f", pdf_in], stdout=sys.stdout, stderr=subprocess.PIPE)
+
+bbox = []
+
+for line in proc.stderr:
+	if line.startswith('%%BoundingBox: '):
+		parts = line.split(' ')
+		bbox.append((int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])))
+
+bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
+bbox = (bbox[0] - margins, bbox[1] - margins, bbox[2] + margins, bbox[3] + margins)
+
+width = bbox[2] - bbox[0]
+height = bbox[3] - bbox[1]
+
+
+# crop crop
+pi = pyPdf.PdfFileReader(file(pdf_in, "rb"))
+po = pyPdf.PdfFileWriter()
+
+for i in range(pi.getNumPages()):
+	p = pi.getPage(i)
+	
+	p.cropBox.lowerLeft = (bbox[0] + p.mediaBox.lowerLeft[0], bbox[1] + p.mediaBox.lowerLeft[1])
+	p.cropBox.upperRight = (bbox[2] + p.mediaBox.lowerLeft[0], bbox[3] + p.mediaBox.lowerLeft[1])
+
+	p.bleedBox = p.cropBox
+	p.trimBox = p.cropBox
+	p.artBox = p.cropBox
+
+	po.addPage(p)
+
+
+tmpdir = tempfile.mkdtemp()
+os.chdir(tmpdir)
+
+outputStream = file('cropped.pdf', 'wb')
+po.write(outputStream)
+outputStream.close()
+
+maxwidth = int((a4lwidth - foldmargin) / 2)
+
+s = float(maxwidth) / width
+if s * height > a4lheight:
+	# exceeds height, scaling will free up more horizontal space. make sure we use this space where it makes sense (i.e. on the folding edge)
+	s = float(a4lheight) / height
+	foldmargin = int(a4lwidth - s * width * 2)
+
+tex = file("sig.tex", "w")
+tex.write("""\documentclass[a4paper,landscape]{article}
+\usepackage{pdfpages}
+\\begin{document}
+\includepdf[pages=-,booklet=true,delta=%dpt 0]{cropped.pdf}
+\end{document}""" % foldmargin)
+tex.close()
+
+os.system('pdflatex sig.tex')
+
+
+# apply folding/stapling guides
+pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
+po = pyPdf.PdfFileWriter()
+
+for i in range(pi.getNumPages()):
+	p = pi.getPage(i)
+	if i == 0:
+		grid = pyPdf.PdfFileReader(file(os.path.join(os.getenv("HOME"), ".booklet.py", "foldstaplegrid.pdf"), "rb"))
+		p.mergePage(grid.getPage(0))
+	po.addPage(p)
+
+outputStream = file('sigs.pdf', 'wb')
+po.write(outputStream)
+outputStream.close()
+
+
+os.system('evince sigs.pdf')
+
+print 'cleanup:', tmpdir
+shutil.rmtree(tmpdir)
