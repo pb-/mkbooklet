@@ -1,11 +1,14 @@
 #!/usr/bin/python
-
 import subprocess
 import pyPdf
 import sys
 import os
 import tempfile
 import shutil
+
+
+viewer = "evince"
+texcomp = "pdflatex"
 
 # adjust these if you want (unit: postscript points)
 margins = 15
@@ -83,26 +86,29 @@ tex.write("""\documentclass[a4paper,landscape]{article}
 \end{document}""" % foldmargin)
 tex.close()
 
-os.system('pdflatex sig.tex')
+os.system(texcomp + ' sig.tex')
 
 
-# apply folding/stapling guides
-pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
-po = pyPdf.PdfFileWriter()
+# apply folding/stapling guides, if available
+gridfile = os.path.join(os.getenv("HOME"), ".mkbooklet", "foldstaplegrid.pdf")
+if os.path.exists(gridfile):
+	pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
+	po = pyPdf.PdfFileWriter()
 
-for i in range(pi.getNumPages()):
-	p = pi.getPage(i)
-	if i == 0:
-		grid = pyPdf.PdfFileReader(file(os.path.join(os.getenv("HOME"), ".booklet.py", "foldstaplegrid.pdf"), "rb"))
-		p.mergePage(grid.getPage(0))
-	po.addPage(p)
+	for i in range(pi.getNumPages()):
+		p = pi.getPage(i)
+		if i == 0:
+			grid = pyPdf.PdfFileReader(file(os.path.join(os.getenv("HOME"), ".booklet.py", "foldstaplegrid.pdf"), "rb"))
+			p.mergePage(grid.getPage(0))
+		po.addPage(p)
 
-outputStream = file('sigs.pdf', 'wb')
-po.write(outputStream)
-outputStream.close()
+	outputStream = file('sigs.pdf', 'wb')
+	po.write(outputStream)
+	outputStream.close()
 
-
-os.system('evince sigs.pdf')
+	os.system(viewer + ' sigs.pdf')
+else:
+	os.system(viewer + ' sig.pdf')
 
 print 'cleanup:', tmpdir
 shutil.rmtree(tmpdir)
