@@ -98,7 +98,7 @@ if os.path.exists(gridfile):
 	for i in range(pi.getNumPages()):
 		p = pi.getPage(i)
 		if i == 0:
-			grid = pyPdf.PdfFileReader(file(os.path.join(os.getenv("HOME"), ".booklet.py", "foldstaplegrid.pdf"), "rb"))
+			grid = pyPdf.PdfFileReader(file(os.path.join(os.getenv("HOME"), ".mkbooklet", "foldstaplegrid.pdf"), "rb"))
 			p.mergePage(grid.getPage(0))
 		po.addPage(p)
 
