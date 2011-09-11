@@ -52,6 +52,7 @@ if not nocrop:
 		m = re.match('^(\\d+),(\\d+)(,|\\+)(\\d+),(\\d+)$', args.bbox)
 		if not m:
 			print 'Invalid bbox format, use x1,y1,x2,y2 or x,y+w,h'
+			shutil.rmtree(tmpdir)
 			sys.exit(-1)
 		else:
 			bbox = (int(m.group(1)), int(m.group(2)), int(m.group(4)), int(m.group(5)))
