@@ -5,85 +5,86 @@ import sys
 import os
 import tempfile
 import shutil
-
+import argparse
 
 viewer = "evince"
 texcomp = "pdflatex"
 
-# adjust these if you want (unit: postscript points)
-margins = 15
-foldmargin = 100
+parser = argparse.ArgumentParser(description='Prepare PDF file for booklet printing.')
+parser.add_argument('-o', '--outer-margins', dest='margins', default=15, type=int)
+parser.add_argument('-f', '--foldmargin', default=100, type=int)
+parser.add_argument('-c', '--nocrop', action='store_true', default=False)
+parser.add_argument('-g', '--noguides', action='store_true', default=False)
+parser.add_argument('FILE')
+args = parser.parse_args()
 
+pdf_in = os.path.abspath(args.FILE)
+margins = args.margins
+foldmargin = args.foldmargin
+nocrop = args.nocrop
+noguides = args.noguides
 
-
-if len(sys.argv) < 2:
-	print 'usage: %s PDF-FILE' % sys.argv[0]
-	sys.exit(-1)
+tmpdir = tempfile.mkdtemp()
+os.chdir(tmpdir)
 
 # A4 in postscript points: 841 x 595 
 a4lheight = 595
 a4lwidth = 841
 
-pdf_in = sys.argv[1]
+if not nocrop:
+	# determine actual (printed) bounding box
+	proc = subprocess.Popen(["/usr/bin/gs", "-sDEVICE=bbox", "-dBATCH", "-dNOPAUSE", "-c", "save", "pop", "-f", pdf_in], stdout=sys.stdout, stderr=subprocess.PIPE)
+
+	bbox = []
+
+	for line in proc.stderr:
+		if line.startswith('%%BoundingBox: '):
+			parts = line.split(' ')
+			bbox.append((int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])))
+
+	bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
+	bbox = (bbox[0] - margins, bbox[1] - margins, bbox[2] + margins, bbox[3] + margins)
+
+	width = bbox[2] - bbox[0]
+	height = bbox[3] - bbox[1]
+
+
+	# crop crop
+	pi = pyPdf.PdfFileReader(file(pdf_in, "rb"))
+	po = pyPdf.PdfFileWriter()
+
+	for i in range(pi.getNumPages()):
+		p = pi.getPage(i)
+		
+		p.cropBox.lowerLeft = (bbox[0] + p.mediaBox.lowerLeft[0], bbox[1] + p.mediaBox.lowerLeft[1])
+		p.cropBox.upperRight = (bbox[2] + p.mediaBox.lowerLeft[0], bbox[3] + p.mediaBox.lowerLeft[1])
+
+		p.bleedBox = p.cropBox
+		p.trimBox = p.cropBox
+		p.artBox = p.cropBox
+
+		po.addPage(p)
 
 
 
+	outputStream = file('cropped.pdf', 'wb')
+	po.write(outputStream)
+	outputStream.close()
 
-# determine actual (printed) bounding box
-proc = subprocess.Popen(["/usr/bin/gs", "-sDEVICE=bbox", "-dBATCH", "-dNOPAUSE", "-c", "save", "pop", "-f", pdf_in], stdout=sys.stdout, stderr=subprocess.PIPE)
+	maxwidth = int((a4lwidth - foldmargin) / 2)
 
-bbox = []
-
-for line in proc.stderr:
-	if line.startswith('%%BoundingBox: '):
-		parts = line.split(' ')
-		bbox.append((int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])))
-
-bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
-bbox = (bbox[0] - margins, bbox[1] - margins, bbox[2] + margins, bbox[3] + margins)
-
-width = bbox[2] - bbox[0]
-height = bbox[3] - bbox[1]
-
-
-# crop crop
-pi = pyPdf.PdfFileReader(file(pdf_in, "rb"))
-po = pyPdf.PdfFileWriter()
-
-for i in range(pi.getNumPages()):
-	p = pi.getPage(i)
-	
-	p.cropBox.lowerLeft = (bbox[0] + p.mediaBox.lowerLeft[0], bbox[1] + p.mediaBox.lowerLeft[1])
-	p.cropBox.upperRight = (bbox[2] + p.mediaBox.lowerLeft[0], bbox[3] + p.mediaBox.lowerLeft[1])
-
-	p.bleedBox = p.cropBox
-	p.trimBox = p.cropBox
-	p.artBox = p.cropBox
-
-	po.addPage(p)
-
-
-tmpdir = tempfile.mkdtemp()
-os.chdir(tmpdir)
-
-outputStream = file('cropped.pdf', 'wb')
-po.write(outputStream)
-outputStream.close()
-
-maxwidth = int((a4lwidth - foldmargin) / 2)
-
-s = float(maxwidth) / width
-if s * height > a4lheight:
-	# exceeds height, scaling will free up more horizontal space. make sure we use this space where it makes sense (i.e. on the folding edge)
-	s = float(a4lheight) / height
-	foldmargin = int(a4lwidth - s * width * 2)
+	s = float(maxwidth) / width
+	if s * height > a4lheight:
+		# exceeds height, scaling will free up more horizontal space. make sure we use this space where it makes sense (i.e., on the folding edge)
+		s = float(a4lheight) / height
+		foldmargin = int(a4lwidth - s * width * 2)
 
 tex = file("sig.tex", "w")
 tex.write("""\documentclass[a4paper,landscape]{article}
 \usepackage{pdfpages}
 \\begin{document}
-\includepdf[pages=-,booklet=true,delta=%dpt 0]{cropped.pdf}
-\end{document}""" % foldmargin)
+\includepdf[pages=-,booklet=true,delta=%dpt 0]{%s}
+\end{document}""" % (foldmargin, pdf_in if nocrop else 'cropped.pdf'))
 tex.close()
 
 os.system(texcomp + ' sig.tex')
@@ -91,14 +92,14 @@ os.system(texcomp + ' sig.tex')
 
 # apply folding/stapling guides, if available
 gridfile = os.path.join(os.getenv("HOME"), ".mkbooklet", "foldstaplegrid.pdf")
-if os.path.exists(gridfile):
+if os.path.exists(gridfile) and not noguides:
 	pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
 	po = pyPdf.PdfFileWriter()
 
 	for i in range(pi.getNumPages()):
 		p = pi.getPage(i)
 		if i == 0:
-			grid = pyPdf.PdfFileReader(file(os.path.join(os.getenv("HOME"), ".mkbooklet", "foldstaplegrid.pdf"), "rb"))
+			grid = pyPdf.PdfFileReader(file(gridfile), "rb")
 			p.mergePage(grid.getPage(0))
 		po.addPage(p)
 
