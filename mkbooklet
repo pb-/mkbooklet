@@ -15,6 +15,7 @@ parser.add_argument('-o', '--outer-margins', dest='margins', default=15, type=in
 parser.add_argument('-f', '--foldmargin', default=100, type=int)
 parser.add_argument('-c', '--nocrop', action='store_true', default=False)
 parser.add_argument('-g', '--noguides', action='store_true', default=False)
+parser.add_argument('-b', '--bbox', action='store', default=None)
 parser.add_argument('FILE')
 args = parser.parse_args()
 
@@ -32,17 +33,30 @@ a4lheight = 595
 a4lwidth = 841
 
 if not nocrop:
-	# determine actual (printed) bounding box
-	proc = subprocess.Popen(["/usr/bin/gs", "-sDEVICE=bbox", "-dBATCH", "-dNOPAUSE", "-c", "save", "pop", "-f", pdf_in], stdout=sys.stdout, stderr=subprocess.PIPE)
+	if not args.bbox:
+		# determine actual (printed) bounding box
+		proc = subprocess.Popen(["/usr/bin/gs", "-sDEVICE=bbox", "-dBATCH", "-dNOPAUSE", "-c", "save", "pop", "-f", pdf_in], stdout=sys.stdout, stderr=subprocess.PIPE)
 
-	bbox = []
+		bbox = []
 
-	for line in proc.stderr:
-		if line.startswith('%%BoundingBox: '):
-			parts = line.split(' ')
-			bbox.append((int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])))
+		for line in proc.stderr:
+			if line.startswith('%%BoundingBox: '):
+				parts = line.split(' ')
+				bbox.append((int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])))
 
-	bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
+		bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
+	else:
+		# x1,y1,x2,y2
+		# x,y+w,h
+		m = re.match('^(\\d+),(\\d+)(,|\\+)(\\d+),(\\d+)$', args.bbox)
+		if not m:
+			print 'Invalid bbox format, use x1,y1,x2,y2 or x,y+w,h'
+			sys.exit(-1)
+		else:
+			bbox = (int(m.group(1)), int(m.group(2)), int(m.group(4)), int(m.group(5)))
+			if m.group(3) == '+':
+				bbox = (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
+
 	bbox = (bbox[0] - margins, bbox[1] - margins, bbox[2] + margins, bbox[3] + margins)
 
 	width = bbox[2] - bbox[0]
