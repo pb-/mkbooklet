@@ -115,7 +115,7 @@ if os.path.exists(gridfile) and not noguides:
 	for i in range(pi.getNumPages()):
 		p = pi.getPage(i)
 		if i == 0:
-			grid = pyPdf.PdfFileReader(file(gridfile), "rb")
+			grid = pyPdf.PdfFileReader(file(gridfile, "rb"))
 			p.mergePage(grid.getPage(0))
 		po.addPage(p)
 
