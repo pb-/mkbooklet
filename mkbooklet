@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser(description='Prepare PDF files for booklet prin
 parser.add_argument('-o', '--outer-margins', dest='margins', default=15, type=int, help='use given value (unit: postscript points) for the minimal outer margins')
 parser.add_argument('-f', '--foldmargin', default=100, type=int, help='use given value (unit: postscript points) for the minimal fold margin')
 parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
+parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
 parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
 parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
 parser.add_argument('FILE')
@@ -25,6 +26,7 @@ margins = args.margins
 foldmargin = args.foldmargin
 nocrop = args.nocrop
 noguides = args.noguides
+croponly = args.croponly
 
 tmpdir = tempfile.mkdtemp()
 os.chdir(tmpdir)
@@ -96,11 +98,18 @@ if not nocrop:
 		foldmargin = int(a4lwidth - s * width * 2)
 
 tex = file("sig.tex", "w")
-tex.write("""\documentclass[a4paper,landscape]{article}
-\usepackage{pdfpages}
+if not croponly:
+	tex.write("""\\documentclass[a4paper,landscape]{article}
+\\usepackage{pdfpages}
 \\begin{document}
-\includepdf[pages=-,booklet=true,delta=%dpt 0]{%s}
-\end{document}""" % (foldmargin, pdf_in if nocrop else 'cropped.pdf'))
+\\includepdf[pages=-,booklet=true,delta=%dpt 0]{%s}
+\\end{document}""" % (foldmargin, pdf_in if nocrop else 'cropped.pdf'))
+else:
+	tex.write("""\\documentclass[a4paper]{article}
+\\usepackage{pdfpages}
+\\begin{document}
+\\includepdf[pages=-]{cropped.pdf}
+\\end{document}""")
 tex.close()
 
 os.system(texcomp + ' sig.tex')
@@ -108,7 +117,7 @@ os.system(texcomp + ' sig.tex')
 
 # apply folding/stapling guides, if available
 gridfile = os.path.join(os.getenv("HOME"), ".mkbooklet", "foldstaplegrid.pdf")
-if os.path.exists(gridfile) and not noguides:
+if os.path.exists(gridfile) and not noguides and not croponly:
 	pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
 	po = pyPdf.PdfFileWriter()
 
