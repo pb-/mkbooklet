@@ -11,12 +11,21 @@ import argparse
 viewer = "evince"
 texcomp = "pdflatex"
 
+
+
+def median(l):
+	l.sort()
+	return l[len(l)/2]
+
+
 parser = argparse.ArgumentParser(description='Prepare PDF files for booklet printing.')
 parser.add_argument('-o', '--outer-margins', dest='margins', default=15, type=int, help='use given value (unit: postscript points) for the minimal outer margins')
 parser.add_argument('-f', '--foldmargin', default=100, type=int, help='use given value (unit: postscript points) for the minimal fold margin')
 parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
 parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
 parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
+parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
+parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
 parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
 parser.add_argument('FILE')
 args = parser.parse_args()
@@ -27,6 +36,8 @@ foldmargin = args.foldmargin
 nocrop = args.nocrop
 noguides = args.noguides
 croponly = args.croponly
+bboxpage = args.bboxpage
+smartbbox = args.smartbbox
 
 tmpdir = tempfile.mkdtemp()
 os.chdir(tmpdir)
@@ -47,7 +58,15 @@ if not nocrop:
 				parts = line.split(' ')
 				bbox.append((int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])))
 
-		bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
+		if bboxpage:
+			bbox = bbox[bboxpage-1]
+		elif smartbbox:
+			bboxs = [None] * 4
+			for i in range(4):
+				bboxs[i] = median(map(lambda x: x[i], bbox))
+			bbox = tuple(bboxs)
+		else:
+			bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
 	else:
 		# x1,y1,x2,y2
 		# x,y+w,h
