@@ -81,11 +81,19 @@ if not nocrop:
 			if m.group(3) == '+':
 				bbox = (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
 
-	bbox = (bbox[0] - margins, bbox[1] - margins, bbox[2] + margins, bbox[3] + margins)
+	# determine scaling factor to calc crop box
+	w = bbox[2] - bbox[0]
+	h = bbox[3] - bbox[1]
+	maxw = (a4lwidth - foldmargin - 4 * margins) / 2
+	maxh = a4lheight - 2 * margins
+	s = float(maxw) / w
+	if s * h > maxh:
+		# exceeds height, scaling will free up more horizontal space. make sure we use this space where it makes sense (i.e., on the folding edge)
+		s = float(maxh) / h
+		foldmargin = int(a4lwidth - s * w * 2 - 4 * margins) 
 
-	width = bbox[2] - bbox[0]
-	height = bbox[3] - bbox[1]
-
+	sm = int(margins / s)
+	cbox = (bbox[0] - sm, bbox[1] - sm, bbox[2] + sm, bbox[3] + sm)
 
 	# crop crop
 	pi = pyPdf.PdfFileReader(file(pdf_in, "rb"))
@@ -94,8 +102,8 @@ if not nocrop:
 	for i in range(pi.getNumPages()):
 		p = pi.getPage(i)
 		
-		p.cropBox.lowerLeft = (bbox[0] + p.mediaBox.lowerLeft[0], bbox[1] + p.mediaBox.lowerLeft[1])
-		p.cropBox.upperRight = (bbox[2] + p.mediaBox.lowerLeft[0], bbox[3] + p.mediaBox.lowerLeft[1])
+		p.cropBox.lowerLeft = (cbox[0] + p.mediaBox.lowerLeft[0], cbox[1] + p.mediaBox.lowerLeft[1])
+		p.cropBox.upperRight = (cbox[2] + p.mediaBox.lowerLeft[0], cbox[3] + p.mediaBox.lowerLeft[1])
 
 		p.bleedBox = p.cropBox
 		p.trimBox = p.cropBox
@@ -103,19 +111,9 @@ if not nocrop:
 
 		po.addPage(p)
 
-
-
 	outputStream = file('cropped.pdf', 'wb')
 	po.write(outputStream)
 	outputStream.close()
-
-	maxwidth = int((a4lwidth - foldmargin) / 2)
-
-	s = float(maxwidth) / width
-	if s * height > a4lheight:
-		# exceeds height, scaling will free up more horizontal space. make sure we use this space where it makes sense (i.e., on the folding edge)
-		s = float(a4lheight) / height
-		foldmargin = int(a4lwidth - s * width * 2)
 
 tex = file("sig.tex", "w")
 if not croponly:
