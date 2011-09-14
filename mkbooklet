@@ -29,10 +29,10 @@ Inner and outer margins have the following meanings.
 |###############|
 +---------------+
 
-# is the outer margin (both dimensions) along the outline of
+'#' is the outer margin (both dimensions) along the outline of
     the phyiscal paper.
-@ is the inner fold margin (horizontally) between the actual
-    content and the center of the paper.
+'@' is the inner fold margin (horizontally) between the actual
+    content and the center of the paper indicated by ':'.
 """)
 parser.add_argument('-o', '--outer-margins', dest='margins', default=15, type=int, help='use given value (unit: postscript points) for the minimal outer margins, see below')
 parser.add_argument('-i', '--inner-margins', dest='imargins', default=65, type=int, help='use given value (unit: postscript points) for the minimal inner (fold)margins, see below')
@@ -42,7 +42,7 @@ parser.add_argument('-g', '--noguides', action='store_true', default=False, help
 parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
 parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
 parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
-parser.add_argument('--version', action='version', version='%(prog)s 11.09a')
+parser.add_argument('--version', action='version', version='%(prog)s 11.09b')
 parser.add_argument('FILE')
 args = parser.parse_args()
 
