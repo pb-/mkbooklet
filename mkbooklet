@@ -18,9 +18,24 @@ def median(l):
 	return l[len(l)/2]
 
 
-parser = argparse.ArgumentParser(description='Prepare PDF files for booklet printing.')
-parser.add_argument('-o', '--outer-margins', dest='margins', default=15, type=int, help='use given value (unit: postscript points) for the minimal outer margins')
-parser.add_argument('-f', '--foldmargin', default=100, type=int, help='use given value (unit: postscript points) for the minimal fold margin')
+parser = argparse.ArgumentParser(description='Prepare PDF files for booklet printing.', formatter_class=argparse.RawDescriptionHelpFormatter, epilog="""
+Inner and outer margins have the following meanings.
+
++---------------+
+|###############|
+|#    @@:@@    #|
+|# P1 @@:@@ P2 #|
+|#    @@:@@    #|
+|###############|
++---------------+
+
+# is the outer margin (both dimensions) along the outline of
+    the phyiscal paper.
+@ is the inner fold margin (horizontally) between the actual
+    content and the center of the paper.
+""")
+parser.add_argument('-o', '--outer-margins', dest='margins', default=15, type=int, help='use given value (unit: postscript points) for the minimal outer margins, see below')
+parser.add_argument('-i', '--inner-margins', dest='imargins', default=65, type=int, help='use given value (unit: postscript points) for the minimal inner (fold)margins, see below')
 parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
 parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
 parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
@@ -33,12 +48,13 @@ args = parser.parse_args()
 
 pdf_in = os.path.abspath(args.FILE)
 margins = args.margins
-foldmargin = args.foldmargin
+foldmargin = 2 * (args.imargins - margins)
 nocrop = args.nocrop
 noguides = args.noguides
 croponly = args.croponly
 bboxpage = args.bboxpage
 smartbbox = args.smartbbox
+
 
 tmpdir = tempfile.mkdtemp()
 os.chdir(tmpdir)
