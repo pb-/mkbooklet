@@ -1,0 +1,170 @@
+#!/usr/bin/python
+import subprocess
+import pyPdf
+import sys
+import os
+import re
+import tempfile
+import shutil
+import argparse
+
+viewer = "evince"
+texcomp = "pdflatex"
+
+
+
+def median(l):
+	l.sort()
+	return l[(len(l)-1)/2]
+
+
+parser = argparse.ArgumentParser(description='Prepare PDF files for A5 printing.', formatter_class=argparse.RawDescriptionHelpFormatter, epilog="""
+Inner and outer margins have the following meanings.
+
++-------+
+|#######|
+|@@    #|
+|@@ P. #|
+|@@    #|
+|#######|
++-------+
+
+'#' is the outer margin (both dimensions) along the outline of
+    the phyiscal paper.
+'@' is the inner fold margin (horizontally) between the actual
+    content and the binding edge of the page.
+""")
+parser.add_argument('-o', '--outer-margins', dest='margins', default=15, type=int, help='use given value (unit: postscript points) for the minimal outer margins, see below')
+parser.add_argument('-i', '--inner-margins', dest='imargins', default=65, type=int, help='use given value (unit: postscript points) for the minimal inner (fold)margins, see below')
+parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
+parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
+parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
+parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
+parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
+parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
+parser.add_argument('--version', action='version', version='%(prog)s 11.09a')
+parser.add_argument('FILE')
+args = parser.parse_args()
+
+pdf_in = os.path.abspath(args.FILE)
+margins = args.margins
+foldmargin = args.imargins
+nocrop = args.nocrop
+noguides = args.noguides
+croponly = args.croponly
+bboxpage = args.bboxpage
+smartbbox = args.smartbbox
+
+
+tmpdir = tempfile.mkdtemp()
+os.chdir(tmpdir)
+
+a5height = 595
+a5width = 419
+
+if not nocrop:
+	if not args.bbox:
+		# determine actual (printed) bounding box
+		proc = subprocess.Popen(["/usr/bin/gs", "-sDEVICE=bbox", "-dBATCH", "-dNOPAUSE", "-c", "save", "pop", "-f", pdf_in], stdout=sys.stdout, stderr=subprocess.PIPE)
+
+		bbox = []
+
+		for line in proc.stderr:
+			if line.startswith('%%BoundingBox: '):
+				parts = line.split(' ')
+				bbox.append((int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])))
+
+		if bboxpage:
+			bbox = bbox[bboxpage-1]
+		elif smartbbox:
+			bboxs = [None] * 4
+			for i in range(4):
+				bboxs[i] = median(map(lambda x: x[i], bbox))
+			bbox = tuple(bboxs)
+		else:
+			bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
+	else:
+		# x1,y1,x2,y2
+		# x,y+w,h
+		m = re.match('^(\\d+),(\\d+)(,|\\+)(\\d+),(\\d+)$', args.bbox)
+		if not m:
+			print 'Invalid bbox format, use x1,y1,x2,y2 or x,y+w,h'
+			shutil.rmtree(tmpdir)
+			sys.exit(-1)
+		else:
+			bbox = (int(m.group(1)), int(m.group(2)), int(m.group(4)), int(m.group(5)))
+			if m.group(3) == '+':
+				bbox = (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
+
+	w = bbox[2] - bbox[0]
+	h = bbox[3] - bbox[1]
+	maxw = a5width - foldmargin - margins
+	maxh = a5height - 2 * margins
+	s0 = float(a5width) / w
+	s = float(maxw) / w
+	sp = maxw / float(a5width)
+	if s0 * h > a5height:
+		s = float(maxh) / h
+		sp = maxh / float(a5height)
+		foldmargin = a5width - s * w - margins
+
+	cbox = bbox
+
+	# crop crop
+	pi = pyPdf.PdfFileReader(file(pdf_in, "rb"))
+	pages = pi.getNumPages()
+	po = pyPdf.PdfFileWriter()
+
+	for i in range(pages):
+		p = pi.getPage(i)
+		
+		p.cropBox.lowerLeft = (cbox[0] + p.mediaBox.lowerLeft[0], cbox[1] + p.mediaBox.lowerLeft[1])
+		p.cropBox.upperRight = (cbox[2] + p.mediaBox.lowerLeft[0], cbox[3] + p.mediaBox.lowerLeft[1])
+
+		p.bleedBox = p.cropBox
+		p.trimBox = p.cropBox
+		p.artBox = p.cropBox
+
+		po.addPage(p)
+
+	outputStream = file('cropped.pdf', 'wb')
+	po.write(outputStream)
+	outputStream.close()
+
+tex = file("sig.tex", "w")
+tex.write("""\\documentclass[a5paper]{article}
+\\usepackage{pdfpages}
+\\begin{document}""")
+for p in range(pages):
+	tex.write('\\includepdf[pages=%d,offset=%d 0,scale=%f]{cropped.pdf}' % ((p+1), (foldmargin/2 -margins/2 if (p%2==0) else margins/2 - foldmargin/2), sp))
+tex.write('\\end{document}')
+tex.close()
+
+os.system(texcomp + ' sig.tex')
+
+# print margins, foldmargin, s, sp
+
+
+# apply folding/stapling guides, if available
+gridfile = os.path.join(os.getenv("HOME"), ".mkbooklet", "foldstaplegrida5.pdf")
+if os.path.exists(gridfile) and not noguides and not croponly:
+	pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
+	po = pyPdf.PdfFileWriter()
+
+	for i in range(pi.getNumPages()):
+		p = pi.getPage(i)
+		if i == 0:
+			grid = pyPdf.PdfFileReader(file(gridfile, "rb"))
+			p.mergePage(grid.getPage(0))
+		po.addPage(p)
+
+	outputStream = file('sigs.pdf', 'wb')
+	po.write(outputStream)
+	outputStream.close()
+
+	os.system(viewer + ' sigs.pdf')
+else:
+	os.system(viewer + ' sig.pdf')
+
+print 'cleanup:', tmpdir
+shutil.rmtree(tmpdir)
