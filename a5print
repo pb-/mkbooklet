@@ -98,15 +98,17 @@ if not nocrop:
 
 	w = bbox[2] - bbox[0]
 	h = bbox[3] - bbox[1]
-	maxw = a5width - foldmargin - margins
-	maxh = a5height - 2 * margins
-	s0 = float(a5width) / w
-	s = float(maxw) / w
-	sp = maxw / float(a5width)
-	if s0 * h > a5height:
-		s = float(maxh) / h
-		sp = maxh / float(a5height)
-		foldmargin = a5width - s * w - margins
+
+	s_full = float(a5width) / w
+	if s_full * h > a5height:
+		s_full = float(a5height) / h
+
+	s_page = 1
+	if s_full * w > a5width - foldmargin - margins:
+		s_page = float(a5width - foldmargin - margins) / (s_full * w)
+	if s_page * s_full * h > a5height - 2 * margins:
+		s_page = float(a5height - 2 * margins) / (s_full * h)
+		foldmargin = int(a5width - margins - s_page * s_full * w)
 
 	cbox = bbox
 
@@ -136,13 +138,13 @@ tex.write("""\\documentclass[a5paper]{article}
 \\usepackage{pdfpages}
 \\begin{document}""")
 for p in range(pages):
-	tex.write('\\includepdf[pages=%d,offset=%d 0,scale=%f]{cropped.pdf}' % ((p+1), (foldmargin/2 -margins/2 if (p%2==0) else margins/2 - foldmargin/2), sp))
+	tex.write('\\includepdf[pages=%d,offset=%d 0,scale=%f]{cropped.pdf}' % ((p+1), (foldmargin/2 -margins/2 if (p%2==0) else margins/2 - foldmargin/2), s_page))
 tex.write('\\end{document}')
 tex.close()
 
 os.system(texcomp + ' sig.tex')
 
-# print margins, foldmargin, s, sp
+#print margins, foldmargin
 
 
 # apply folding/stapling guides, if available
