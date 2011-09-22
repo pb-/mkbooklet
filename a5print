@@ -65,14 +65,13 @@ a5width = 419
 if not nocrop:
 	if not args.bbox:
 		# determine actual (printed) bounding box
-		proc = subprocess.Popen(["/usr/bin/gs", "-sDEVICE=bbox", "-dBATCH", "-dNOPAUSE", "-c", "save", "pop", "-f", pdf_in], stdout=sys.stdout, stderr=subprocess.PIPE)
+		proc = subprocess.Popen(['/usr/bin/pdfbbox', pdf_in], stdout=subprocess.PIPE, stderr=sys.stderr)
 
 		bbox = []
 
-		for line in proc.stderr:
-			if line.startswith('%%BoundingBox: '):
-				parts = line.split(' ')
-				bbox.append((int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])))
+		for line in proc.stdout:
+			parts = line.split(' ')
+			bbox.append((int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])))
 
 		if bboxpage:
 			bbox = bbox[bboxpage-1]
