@@ -1,0 +1,53 @@
+#!/usr/bin/python
+import subprocess
+import sys
+import pyPdf
+import struct
+import struct
+
+if len(sys.argv) < 2:
+	print 'need file arg'
+	sys.exit(-1)
+
+pdffile = sys.argv[1]
+
+f = pyPdf.PdfFileReader(file(pdffile, 'rb'))
+pages = f.getNumPages()
+
+sizes = []
+
+for i in range(pages):
+	p = f.getPage(i)
+	sizes.append((int(round(p.mediaBox.getUpperRight_x() - p.mediaBox.getLowerLeft_x())), int(round(p.mediaBox.getUpperRight_y() - p.mediaBox.getLowerLeft_y()))))
+
+proc = subprocess.Popen(['/usr/bin/gs', '-q', '-dBATCH', '-dNOPAUSE', '-sDEVICE=bit', '-sOutputFile=%stdout', pdffile], stdout=subprocess.PIPE)
+
+for s in sizes:
+	(w,h) = s
+	bbox = (w-1, h-1, 0, 0)
+	
+	row_len = w / 8
+	if w % 8 > 0:
+		row_len += 1
+
+	fmt = 'b' * row_len
+
+	for y in range(h-1, -1, -1):
+		row = proc.stdout.read(row_len)
+		row = struct.unpack(fmt, row)
+		# use low resolution for x-positions. this is
+		# substantially faster and comes with an error
+		# of at most 8pt \approx 2.8mm
+		for x in range(0, w / 8):
+			if row[x] != 0:
+				bbox = (
+					min(bbox[0], x * 8),
+					min(bbox[1], y),
+					max(bbox[2], x * 8 + 8),
+					max(bbox[3], y),
+				)
+
+	if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
+		print bbox[0], bbox[1], bbox[2], bbox[3]
+	else:
+		print
