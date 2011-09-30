@@ -7,11 +7,151 @@ import re
 import tempfile
 import shutil
 import argparse
+import struct
 
 viewer = "evince"
 texcomp = "pdflatex"
 
 
+def pdfbbox(filename):
+	f = pyPdf.PdfFileReader(file(filename, 'rb'))
+	pages = f.getNumPages()
+
+	sizes = []
+
+	for i in range(pages):
+		p = f.getPage(i)
+		sizes.append((int(round(p.mediaBox.getUpperRight_x() - p.mediaBox.getLowerLeft_x())), int(round(p.mediaBox.getUpperRight_y() - p.mediaBox.getLowerLeft_y()))))
+
+	proc = subprocess.Popen(['/usr/bin/gs', '-q', '-dBATCH', '-dNOPAUSE', '-sDEVICE=bit', '-sOutputFile=%stdout', filename], stdout=subprocess.PIPE)
+
+	bboxs = []
+
+	for s in sizes:
+		(w,h) = s
+		bbox = (w-1, h-1, 0, 0)
+		
+		row_len = w / 8
+		if w % 8 > 0:
+			row_len += 1
+
+		fmt = 'b' * row_len
+
+		for y in range(h-1, -1, -1):
+			row = proc.stdout.read(row_len)
+			row = struct.unpack(fmt, row)
+			# use low resolution for x-positions. this is
+			# substantially faster and comes with an error
+			# of at most 8pt \approx 2.8mm
+			for x in range(0, w / 8):
+				if row[x] != 0:
+					bbox = (
+						min(bbox[0], x * 8),
+						min(bbox[1], y),
+						max(bbox[2], x * 8 + 8),
+						max(bbox[3], y + 2),
+					)
+
+		if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
+			bboxs.append(tuple(bbox))
+
+	return bboxs
+
+
+def generate_guides(num):
+	vmargin = 6
+	hmargin = 2.5
+	content = '2.83464567 0 0 2.83464567 0 0 cm 0.1 w 1 0 0 1 %f %d cm' % (148.5 - hmargin, vmargin)
+
+	n = num
+	h = 12 # mm
+	sp = float(210 - h - 2*vmargin)/(n-1) 
+
+	for i in range(n):
+		if i != 0:
+			content += "1 0 0 1 0 %f cm\n" % sp
+		content += """
+0 0 m
+0 %d l
+s
+0 2 m
+-2 2 l
+s
+0 10 m
+-2 10 l
+s
+""" % (h)
+
+	template = """%%PDF-1.5
+%%%%%%%%%%
+1 0 obj 
+<<
+/Kids [2 0 R]
+/Count 1
+/Type /Pages
+>>
+endobj 
+3 0 obj 
+<<
+>>
+endobj 
+4 0 obj 
+<<
+/Length %d
+>>
+stream
+q
+Q
+%s
+endstream 
+endobj 
+2 0 obj 
+<<
+/Group 
+<<
+/CS /DeviceRGB
+/Type /Group
+/S /Transparency
+>>
+/Parent 1 0 R
+/Resources 3 0 R
+/MediaBox [0 0 841.889764 595.275591]
+                
+/Contents 4 0 R
+/Type /Page
+>>
+endobj 
+5 0 obj 
+<<
+/Pages 1 0 R
+/Type /Catalog
+>>
+endobj 
+6 0 obj 
+<<
+/Creator (mkbooklet http://github.com/pb-/mkbooklet)
+/Producer (mkbooklet http://github.com/pb-/mkbooklet)
+>>
+endobj xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+%010d 00000 n 
+0000000074 00000 n 
+0000000097 00000 n 
+%010d 00000 n 
+%010d 00000 n 
+trailer
+
+<<
+/Info 6 0 R
+/Root 5 0 R
+/Size 7
+>>
+startxref
+%d
+%%%%EOF""" % (4+len(content), content, 155+len(content), 351+len(content), 402+len(content), 531+len(content))
+	return template
 
 def median(l):
 	l.sort()
@@ -42,7 +182,7 @@ parser.add_argument('-g', '--noguides', action='store_true', default=False, help
 parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
 parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
 parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
-parser.add_argument('--version', action='version', version='%(prog)s 11.09b')
+parser.add_argument('--version', action='version', version='%(prog)s 11.09c')
 parser.add_argument('FILE')
 args = parser.parse_args()
 
@@ -56,7 +196,7 @@ bboxpage = args.bboxpage
 smartbbox = args.smartbbox
 
 
-tmpdir = tempfile.mkdtemp()
+tmpdir = tempfile.mkdtemp(prefix='mkbooklet-')
 os.chdir(tmpdir)
 
 # A4 in postscript points: 841 x 595 
@@ -66,14 +206,7 @@ a4lwidth = 841
 if not nocrop:
 	if not args.bbox:
 		# determine actual (printed) bounding box
-		proc = subprocess.Popen(["/usr/bin/gs", "-sDEVICE=bbox", "-dBATCH", "-dNOPAUSE", "-c", "save", "pop", "-f", pdf_in], stdout=sys.stdout, stderr=subprocess.PIPE)
-
-		bbox = []
-
-		for line in proc.stderr:
-			if line.startswith('%%BoundingBox: '):
-				parts = line.split(' ')
-				bbox.append((int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])))
+		bbox = pdfbbox(pdf_in)
 
 		if bboxpage:
 			bbox = bbox[bboxpage-1]
@@ -150,15 +283,18 @@ os.system(texcomp + ' sig.tex')
 
 
 # apply folding/stapling guides, if available
-gridfile = os.path.join(os.getenv("HOME"), ".mkbooklet", "foldstaplegrid.pdf")
-if os.path.exists(gridfile) and not noguides and not croponly:
+if not noguides and not croponly:
+	f = file('grid.pdf', 'wb')
+	f.write(generate_guides(5))
+	f.close()
+
 	pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
 	po = pyPdf.PdfFileWriter()
 
 	for i in range(pi.getNumPages()):
 		p = pi.getPage(i)
 		if i == 0:
-			grid = pyPdf.PdfFileReader(file(gridfile, "rb"))
+			grid = pyPdf.PdfFileReader(file('grid.pdf', 'rb'))
 			p.mergePage(grid.getPage(0))
 		po.addPage(p)
 

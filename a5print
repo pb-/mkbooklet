@@ -183,7 +183,7 @@ parser.add_argument('-g', '--noguides', action='store_true', default=False, help
 parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
 parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
 parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
-parser.add_argument('--version', action='version', version='%(prog)s 11.09b')
+parser.add_argument('--version', action='version', version='%(prog)s 11.09c')
 parser.add_argument('FILE')
 args = parser.parse_args()
 
@@ -197,7 +197,7 @@ bboxpage = args.bboxpage
 smartbbox = args.smartbbox
 
 
-tmpdir = tempfile.mkdtemp()
+tmpdir = tempfile.mkdtemp(prefix='a5print-')
 os.chdir(tmpdir)
 
 a5height = 595
