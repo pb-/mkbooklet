@@ -7,9 +7,56 @@ import re
 import tempfile
 import shutil
 import argparse
+import struct
 
 viewer = "evince"
 texcomp = "pdflatex"
+
+
+def pdfbbox(filename):
+	f = pyPdf.PdfFileReader(file(filename, 'rb'))
+	pages = f.getNumPages()
+
+	sizes = []
+
+	for i in range(pages):
+		p = f.getPage(i)
+		sizes.append((int(round(p.mediaBox.getUpperRight_x() - p.mediaBox.getLowerLeft_x())), int(round(p.mediaBox.getUpperRight_y() - p.mediaBox.getLowerLeft_y()))))
+
+	proc = subprocess.Popen(['/usr/bin/gs', '-q', '-dBATCH', '-dNOPAUSE', '-sDEVICE=bit', '-sOutputFile=%stdout', filename], stdout=subprocess.PIPE)
+
+	bboxs = []
+
+	for s in sizes:
+		(w,h) = s
+		bbox = (w-1, h-1, 0, 0)
+		
+		row_len = w / 8
+		if w % 8 > 0:
+			row_len += 1
+
+		fmt = 'b' * row_len
+
+		for y in range(h-1, -1, -1):
+			row = proc.stdout.read(row_len)
+			row = struct.unpack(fmt, row)
+			# use low resolution for x-positions. this is
+			# substantially faster and comes with an error
+			# of at most 8pt \approx 2.8mm
+			for x in range(0, w / 8):
+				if row[x] != 0:
+					bbox = (
+						min(bbox[0], x * 8),
+						min(bbox[1], y),
+						max(bbox[2], x * 8 + 8),
+						max(bbox[3], y + 2),
+					)
+
+		if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
+			bboxs.append(tuple(bbox))
+
+	return bboxs
+
 
 def generate_guides(num):
 	vmargin = 6
@@ -159,13 +206,7 @@ a5width = 419
 if not nocrop:
 	if not args.bbox:
 		# determine actual (printed) bounding box
-		proc = subprocess.Popen(['/usr/bin/pdfbbox', pdf_in], stdout=subprocess.PIPE, stderr=sys.stderr)
-
-		bbox = []
-
-		for line in proc.stdout:
-			parts = line.split(' ')
-			bbox.append((int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])))
+		bbox = pdfbbox(pdf_in)
 
 		if bboxpage:
 			bbox = bbox[bboxpage-1]
