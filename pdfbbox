@@ -44,7 +44,7 @@ for s in sizes:
 					min(bbox[0], x * 8),
 					min(bbox[1], y),
 					max(bbox[2], x * 8 + 8),
-					max(bbox[3], y),
+					max(bbox[3], y + 2),
 				)
 
 	if bbox[0] < bbox[2] and bbox[1] < bbox[3]:

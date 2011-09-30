@@ -35,7 +35,7 @@ Inner and outer margins have the following meanings.
     content and the binding edge of the page.
 """)
 parser.add_argument('-o', '--outer-margins', dest='margins', default=15, type=int, help='use given value (unit: postscript points) for the minimal outer margins, see below')
-parser.add_argument('-i', '--inner-margins', dest='imargins', default=65, type=int, help='use given value (unit: postscript points) for the minimal inner (fold)margins, see below')
+parser.add_argument('-i', '--inner-margins', dest='imargins', default=45, type=int, help='use given value (unit: postscript points) for the minimal inner (fold)margins, see below')
 parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
 parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
 parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
