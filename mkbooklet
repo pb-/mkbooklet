@@ -12,6 +12,7 @@ import struct
 viewer = "evince"
 texcomp = "pdflatex"
 
+mm_in_pt = 2.83464567
 
 def pdfbbox(filename):
 	f = pyPdf.PdfFileReader(file(filename, 'rb'))
@@ -58,10 +59,11 @@ def pdfbbox(filename):
 	return bboxs
 
 
-def generate_guides(num):
+def generate_guides(num, a5mode):
 	vmargin = 6
-	hmargin = 2.5
-	content = '2.83464567 0 0 2.83464567 0 0 cm 0.1 w 1 0 0 1 %f %d cm' % (148.5 - hmargin, vmargin)
+	hmargin = 5 if a5mode else 2.5
+	x = hmargin if a5mode else 148.5 - hmargin
+	content = '2.83464567 0 0 2.83464567 0 0 cm 0.1 w 1 0 0 1 %f %d cm' % (x, vmargin)
 
 	n = num
 	h = 12 # mm
@@ -75,12 +77,12 @@ def generate_guides(num):
 0 %d l
 s
 0 2 m
--2 2 l
+%c2 2 l
 s
 0 10 m
--2 10 l
+%c2 10 l
 s
-""" % (h)
+""" % (h, ' ' if a5mode else '-', ' ' if a5mode else '-')
 
 	template = """%%PDF-1.5
 %%%%%%%%%%
@@ -174,27 +176,40 @@ Inner and outer margins have the following meanings.
 '@' is the inner fold margin (horizontally) between the actual
     content and the center of the paper indicated by ':'.
 """)
-parser.add_argument('-o', '--outer-margins', dest='margins', default=15, type=int, help='use given value (unit: postscript points) for the minimal outer margins, see below')
-parser.add_argument('-i', '--inner-margins', dest='imargins', default=65, type=int, help='use given value (unit: postscript points) for the minimal inner (fold)margins, see below')
+parser.add_argument('-5', '--a5', action='store_true', default=False, help='produce single A5 pages instead of 2-up A4')
+parser.add_argument('-o', '--outer-margins', dest='margins', default='default', type=str, help='use given value (unit: millimeters) for the minimal outer margins, see below')
+parser.add_argument('-i', '--inner-margins', dest='imargins', default='default', type=str, help='use given value (unit: millimeters) for the minimal inner (fold)margins, see below')
 parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
 parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
 parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
 parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
 parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
 parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
-parser.add_argument('--version', action='version', version='%(prog)s 11.09c')
+parser.add_argument('--version', action='version', version='%(prog)s 11.10a')
 parser.add_argument('FILE')
 args = parser.parse_args()
 
 pdf_in = os.path.abspath(args.FILE)
-margins = args.margins
-foldmargin = 2 * (args.imargins - margins)
+a5mode = args.a5
+margins = 6 if args.margins == 'default' else int(args.margins)
+if args.imargins == 'default':
+	if a5mode:
+		imargins = 16
+	else:
+		imargins = 22
+else:
+	imargins = int(args.imargins)
+
+if not a5mode:
+	imargins = 2 * (imargins - margins)
+
+margins = int(round(margins * mm_in_pt))
+foldmargin = int(round(imargins * mm_in_pt))
 nocrop = args.nocrop
 noguides = args.noguides
 croponly = args.croponly
 bboxpage = args.bboxpage
 smartbbox = args.smartbbox
-
 
 tmpdir = tempfile.mkdtemp(prefix='mkbooklet-')
 os.chdir(tmpdir)
@@ -202,6 +217,8 @@ os.chdir(tmpdir)
 # A4 in postscript points: 841 x 595 
 a4lheight = 595
 a4lwidth = 841
+a5height = 595
+a5width = 419
 
 if not nocrop:
 	if not args.bbox:
@@ -230,25 +247,39 @@ if not nocrop:
 			if m.group(3) == '+':
 				bbox = (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
 
-	# determine scaling factor to calc crop box
 	w = bbox[2] - bbox[0]
 	h = bbox[3] - bbox[1]
-	maxw = (a4lwidth - foldmargin - 4 * margins) / 2
-	maxh = a4lheight - 2 * margins
-	s = float(maxw) / w
-	if s * h > maxh:
-		# exceeds height, scaling will free up more horizontal space. make sure we use this space where it makes sense (i.e., on the folding edge)
-		s = float(maxh) / h
-		foldmargin = int(a4lwidth - s * w * 2 - 4 * margins) 
 
-	sm = int(margins / s)
-	cbox = (bbox[0] - sm, bbox[1] - sm, bbox[2] + sm, bbox[3] + sm)
+	if not a5mode:
+		maxw = (a4lwidth - foldmargin - 4 * margins) / 2
+		maxh = a4lheight - 2 * margins
+		s = float(maxw) / w
+		if s * h > maxh:
+			# exceeds height, scaling will free up more horizontal space. make sure we use this space where it makes sense (i.e., on the folding edge)
+			s = float(maxh) / h
+			foldmargin = int(a4lwidth - s * w * 2 - 4 * margins) 
+
+		sm = int(margins / s)
+		cbox = (bbox[0] - sm, bbox[1] - sm, bbox[2] + sm, bbox[3] + sm)
+	else:
+		s_full = float(a5width) / w
+		if s_full * h > a5height:
+			s_full = float(a5height) / h
+
+		s_page = 1
+		if s_full * w > a5width - foldmargin - margins:
+			s_page = float(a5width - foldmargin - margins) / (s_full * w)
+		if s_page * s_full * h > a5height - 2 * margins:
+			s_page = float(a5height - 2 * margins) / (s_full * h)
+			foldmargin = int(a5width - margins - s_page * s_full * w)
+		cbox = bbox
 
 	# crop crop
 	pi = pyPdf.PdfFileReader(file(pdf_in, "rb"))
+	pages = pi.getNumPages()
 	po = pyPdf.PdfFileWriter()
 
-	for i in range(pi.getNumPages()):
+	for i in range(pages):
 		p = pi.getPage(i)
 		
 		p.cropBox.lowerLeft = (cbox[0] + p.mediaBox.lowerLeft[0], cbox[1] + p.mediaBox.lowerLeft[1])
@@ -264,28 +295,38 @@ if not nocrop:
 	po.write(outputStream)
 	outputStream.close()
 
-tex = file("sig.tex", "w")
-if not croponly:
-	tex.write("""\\documentclass[a4paper,landscape]{article}
-\\usepackage{pdfpages}
-\\begin{document}
-\\includepdf[pages=-,booklet=true,delta=%dpt 0]{%s}
-\\end{document}""" % (foldmargin, pdf_in if nocrop else 'cropped.pdf'))
-else:
-	tex.write("""\\documentclass[a4paper]{article}
-\\usepackage{pdfpages}
-\\begin{document}
-\\includepdf[pages=-]{cropped.pdf}
-\\end{document}""")
-tex.close()
 
+tex = file("sig.tex", "w")
+if not a5mode:
+	if not croponly:
+		tex.write("""\\documentclass[a4paper,landscape]{article}
+	\\usepackage{pdfpages}
+	\\begin{document}
+	\\includepdf[pages=-,booklet=true,delta=%dpt 0]{%s}
+	\\end{document}""" % (foldmargin, pdf_in if nocrop else 'cropped.pdf'))
+	else:
+		tex.write("""\\documentclass[a4paper]{article}
+	\\usepackage{pdfpages}
+	\\begin{document}
+	\\includepdf[pages=-]{cropped.pdf}
+	\\end{document}""")
+	tex.close()
+else:
+	tex.write("""\\documentclass[a5paper]{article}
+	\\usepackage{pdfpages}
+	\\begin{document}""")
+	for p in range(pages):
+		tex.write('\\includepdf[pages=%d,offset=%d 0,scale=%f]{cropped.pdf}' % ((p+1), (foldmargin/2 -margins/2 if (p%2==0) else margins/2 - foldmargin/2), s_page))
+	tex.write('\\end{document}')
+
+tex.close()
 os.system(texcomp + ' sig.tex')
 
 
 # apply folding/stapling guides, if available
 if not noguides and not croponly:
 	f = file('grid.pdf', 'wb')
-	f.write(generate_guides(5))
+	f.write(generate_guides(5, a5mode))
 	f.close()
 
 	pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
