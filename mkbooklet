@@ -59,6 +59,32 @@ def pdfbbox(filename):
 	return bboxs
 
 
+def mkemptypage(w, h):
+	ws = '%f' % w
+	hs = '%f' % h
+	l = len(ws) + len(hs)
+
+	tpl = '''%%PDF-1.1
+%%\xc3\xad\xc3\xac\xc2\xa6"
+
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 %s %s] >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /Resources << >> /Contents [] >> endobj
+
+xref
+0 4
+0000000000 65535 f 
+0000000019 00000 n 
+0000000068 00000 n 
+%010d 00000 n 
+trailer << /Root 1 0 R /Size 4 >>
+startxref
+%d
+%%%%EOF'''
+
+	return tpl % (ws, hs, 143 + l, 221 + l)
+
+
 def generate_guides(num, a5mode):
 	vmargin = 6
 	hmargin = 5 if a5mode else 2.5
