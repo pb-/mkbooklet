@@ -113,55 +113,19 @@ s
 
 	template = """%%PDF-1.5
 %%%%%%%%%%
-1 0 obj 
-<<
-/Kids [2 0 R]
-/Count 1
-/Type /Pages
->>
-endobj 
-3 0 obj 
-<<
->>
-endobj 
-4 0 obj 
-<<
-/Length %d
->>
+1 0 obj  << /Kids [2 0 R] /Count 1 /Type /Pages >> endobj 
+3 0 obj  << >> endobj 
+4 0 obj  << /Length %d >>
 stream
 q
 Q
 %s
 endstream 
 endobj 
-2 0 obj 
-<<
-/Group 
-<<
-/CS /DeviceRGB
-/Type /Group
-/S /Transparency
->>
-/Parent 1 0 R
-/Resources 3 0 R
-/MediaBox [0 0 841.889764 595.275591]
-                
-/Contents 4 0 R
-/Type /Page
->>
-endobj 
-5 0 obj 
-<<
-/Pages 1 0 R
-/Type /Catalog
->>
-endobj 
-6 0 obj 
-<<
-/Creator (mkbooklet http://github.com/pb-/mkbooklet)
-/Producer (mkbooklet http://github.com/pb-/mkbooklet)
->>
-endobj xref
+2 0 obj  << /Group  << /CS /DeviceRGB /Type /Group /S /Transparency >> /Parent 1 0 R /Resources 3 0 R /MediaBox [0 0 841.889764 595.275591]                  /Contents 4 0 R /Type /Page >> endobj 
+5 0 obj  << /Pages 1 0 R /Type /Catalog >> endobj 
+6 0 obj  << /Creator (mkbooklet http://github.com/pb-/mkbooklet) /Producer (mkbooklet http://github.com/pb-/mkbooklet) >> endobj
+xref
 0 7
 0000000000 65535 f 
 0000000015 00000 n 
@@ -172,15 +136,12 @@ endobj xref
 %010d 00000 n 
 trailer
 
-<<
-/Info 6 0 R
-/Root 5 0 R
-/Size 7
->>
+<< /Info 6 0 R /Root 5 0 R /Size 7 >>
 startxref
 %d
 %%%%EOF""" % (4+len(content), content, 155+len(content), 351+len(content), 402+len(content), 531+len(content))
 	return template
+
 
 def median(l):
 	l.sort()
@@ -358,17 +319,13 @@ os.system(texcomp + ' sig.tex')
 
 # apply folding/stapling guides, if available
 if not noguides and not croponly:
-	f = file('grid.pdf', 'wb')
-	f.write(generate_guides(5, a5mode))
-	f.close()
-
 	pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
 	po = pyPdf.PdfFileWriter()
 
 	for i in range(pi.getNumPages()):
 		p = pi.getPage(i)
 		if i == 0:
-			grid = pyPdf.PdfFileReader(file('grid.pdf', 'rb'))
+			grid = pyPdf.PdfFileReader(StringIO.StringIO(generate_guides(5, a5mode)))
 			p.mergePage(grid.getPage(0))
 		po.addPage(p)
 
