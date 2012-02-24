@@ -8,6 +8,7 @@ import tempfile
 import shutil
 import argparse
 import struct
+import StringIO
 
 viewer = "evince"
 texcomp = "pdflatex"
@@ -205,6 +206,7 @@ Inner and outer margins have the following meanings.
 parser.add_argument('-5', '--a5', action='store_true', default=False, help='produce single A5 pages instead of 2-up A4')
 parser.add_argument('-o', '--outer-margins', dest='margins', default='default', type=str, help='use given value (unit: millimeters) for the minimal outer margins, see below')
 parser.add_argument('-i', '--inner-margins', dest='imargins', default='default', type=str, help='use given value (unit: millimeters) for the minimal inner (fold)margins, see below')
+parser.add_argument('-e', '--extrapages', dest='epages', default=0, type=int, help='add given number of extra blank pages at the end of the document')
 parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
 parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
 parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
@@ -317,6 +319,11 @@ if not nocrop:
 
 		po.addPage(p)
 
+	# extra blank pages
+	bi = pyPdf.PdfFileReader(StringIO.StringIO(mkemptypage(cbox[2]-cbox[0],cbox[3]-cbox[1])))
+	for i in range(args.epages):
+		po.addPage(bi.getPage(0))
+
 	outputStream = file('cropped.pdf', 'wb')
 	po.write(outputStream)
 	outputStream.close()
@@ -341,7 +348,7 @@ else:
 	tex.write("""\\documentclass[a5paper]{article}
 	\\usepackage{pdfpages}
 	\\begin{document}""")
-	for p in range(pages):
+	for p in range(pages + args.epages):
 		tex.write('\\includepdf[pages=%d,offset=%d 0,scale=%f]{cropped.pdf}' % ((p+1), (foldmargin/2 -margins/2 if (p%2==0) else margins/2 - foldmargin/2), s_page))
 	tex.write('\\end{document}')
 
