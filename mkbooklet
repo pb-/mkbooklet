@@ -171,6 +171,7 @@ parser.add_argument('-e', '--extrapages', dest='epages', default=0, type=int, he
 parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
 parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
 parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
+parser.add_argument('-S', '--signature', dest='signature', type=int, action='store', default=None, help='use given number for signature size instead of producing one big signature')
 parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
 parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
 parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
@@ -199,6 +200,7 @@ noguides = args.noguides
 croponly = args.croponly
 bboxpage = args.bboxpage
 smartbbox = args.smartbbox
+signature = args.signature
 
 tmpdir = tempfile.mkdtemp(prefix='mkbooklet-')
 os.chdir(tmpdir)
@@ -293,7 +295,14 @@ if not nocrop:
 tex = file("sig.tex", "w")
 if not a5mode:
 	if not croponly:
-		tex.write("""\\documentclass[a4paper,landscape]{article}
+		if signature:
+			tex.write("""\\documentclass[a4paper,landscape]{article}
+	\\usepackage{pdfpages}
+	\\begin{document}
+	\\includepdf[pages=-,signature=%d,delta=%dpt 0]{%s}
+	\\end{document}""" % (signature * 4, foldmargin, pdf_in if nocrop else 'cropped.pdf'))
+		else:
+			tex.write("""\\documentclass[a4paper,landscape]{article}
 	\\usepackage{pdfpages}
 	\\begin{document}
 	\\includepdf[pages=-,booklet=true,delta=%dpt 0]{%s}
