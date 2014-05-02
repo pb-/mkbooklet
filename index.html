@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<title data-ws="title">mkbooklet &ndash; prepare PDF files for booklet printing</title>
+	<style type="text/css">
+		body {
+			font-family: "Georgia", serif;
+			max-width: 45em;
+			padding: 16px;
+			margin: auto;
+		}
+		h1 {
+			border-bottom: 1px solid black;
+		}
+		a {
+			color: rgb(18, 108, 154);
+		}
+		a:hover {
+			color: rgb(129, 188, 221);
+		}
+		li {
+			list-style-type: square;
+		}
+		ul.pub li {
+			margin-top: .5em;
+		}
+		dt {
+			font-weight: bold;
+			margin-bottom: .75em;
+		}
+		dd {
+			margin-bottom: .75em;
+		}
+		hr {
+			border-style: none;
+			height: 1px;
+			background-color: black;
+		}
+	</style>
+</head>
+<body data-ws="content">
+	<h1>mkbooklet &ndash; prepare PDF files for booklet printing</h1>
+	<p><a href="https://raw.github.com/pb-/mkbooklet/master/mkbooklet">mkbooklet</a> (<a href="https://github.com/pb-/mkbooklet">on github</a>) takes as input a PDF file and creates an A4 paper output PDF file ready for <a href="example.png">booklet</a> (long edge, duplex-) printing. In addition, it minimizes margins on the outer edges in order to waste as little printable space as possible, even in situations where <a href="fail.png">pdfcrop tends to fail</a> or if the pages actually consist of scanned&mdash;i.e., rasterized&mdash;imagery. Optionally, mkbooklet can add folding (or cutting) and stapling guides to the final output file.</p>
+
+	<p>Alternatively, mkbooklet can be used to generate a PDF file of single A5 pages ready for A5 printing and binding.</p>
+
+<h2>Example</h2>
+
+<p>Input and Output.</p>
+
+<div style="display: inline; padding: 16px;">
+<img title="Input file" style="border: 1px solid black;" src="ins.png" alt="Example input document">
+</div>
+<div style="display: inline; padding: 16px;">
+<img title="Output file" style="border: 1px solid black;" src="outs.png" alt="Example output document">
+</div>
+
+<h2>Usage</h2>
+
+<p><kbd>$ mkbooklet fulltext.pdf</kbd></p>
+<p><kbd>$ mkbooklet --help</kbd></p>
+
+<p>Note: This program works best if page scaling/shrinking/fitting is disabled when sending the document to the printer, assuming it runs on A4 paper.</p>
+
+<h2>Requirements</h2>
+<p>mkbooklet should run in any enviroment that provides the following programs.</p>
+
+<ul>
+  <li>Python</li>
+  <li>pyPdf (PDF support for Python; not part of the standard library)</li>
+  <li>Ghostscript a.k.a. <kbd>gs</kbd></li>
+  <li>A Latex compiler capable of producing PDF output (e.g. pdflatex) and a PDF viewer</li>
+</ul>
+
+<h2>Documentation</h2>
+<p>Without any options, mkbooklet will most likely just do the right thing (for me, at least), but there are quite a few options to play around with.</p>
+
+<dl>
+<dt class="doc">-h, --help</dt>
+<dd>Show help message.</dd>
+
+<dt class="doc">-5, --a5</dt>
+<dd>Instead of outputting 2up (two-on-one) A4 pages, produce 1up (one-on-one) A5 output. Useful if the printer itself directly processes A5 paper.</dd>
+
+<dt class="doc">-o MARGIN, --outer-margins MARGIN</dt>
+<dd>Use <kbd>MARGIN</kbd> millimeters for the outer margins of the paper. This includes the left/right outer (non-folding) side as well as top and bottom margins. Since the content is placed as far away as possible from the folding edge, the value is only a <em>lower bound</em> for top and bottom margins, depending on the aspect ratio of the content.</dd>
+
+<dt class="doc">-i MARGIN, --inner-margins MARGIN</dt>
+<dd>Use <kbd>MARGIN</kbd> millimeters for the inner margin of the paper, i.e., the margin between the content and the folding edge. This is only a <em>lower bound</em> because, depending on the aspect ratio of the content, mkbooklet will move the contents to the outer edges of the paper.</dd>
+
+<dt class="doc">-e PAGES, --extrapages PAGES</dt>
+<dd>Add at least <kbd>PAGES</kbd> additional blank pages for notes to the end of the document.</dd>
+
+<dt class="doc">-c, --nocrop</dt>
+<dd>Do not crop the input file, leaving original margins fully intact (modulo scaling).</dd>
+
+<dt class="doc">-C, --croponly</dt>
+<dd>Only crop the input file and produce A4 output pages, good for screen reading.</dd>
+
+<dt class="doc">-g, --noguides</dt>
+<dd>Do not add stapling guides to the title page.</dd>
+
+<dt class="doc">-s, --smartbbox</dt>
+<dd>Instead of taking the maximum over the document when determining the bounding box, use the median on each margin seperately. Very useful for poorly typeset documents that contain overfull lines on some of the pages.</dd>
+
+<dt class="doc">-S, --signature NUM</dt>
+<dd>Create <a href="http://en.wikipedia.org/wiki/Bookbinding#Terms_and_techniques">signatures</a> consisting of NUM sheets instead of one large one; the last signature may have less than NUM sheets. Note that this requires short-edge printing instead of long edge.</dd>
+
+<dt class="doc">-p PAGE, --bboxpage PAGE</dt>
+<dd>Obtain the bounding box for the entire document from <kbd>PAGE</kbd> only.</dd>
+
+<dt class="doc">-b BBOX, --bbox BBOX</dt>
+<dd>Use <kbd>BBOX</kbd> for the bounding box, specified either as <em>x<sub>1</sub>,y<sub>1</sub>,x<sub>2</sub>,y<sub>2</sub></em> or <em>x,y+w,h</em> where all values are assumed to be integer postscript points.</dd>
+
+<dt class="doc">--version</dt>
+<dd>Display current version.</dd>
+</dl>
+
+<p><a href="..">Back</a> to my homepage.</p>
+
+  </body>
+</html>
