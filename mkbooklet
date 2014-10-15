@@ -108,38 +108,7 @@ startxref
 
 	return tpl % (ws, hs, 143 + l, 221 + l)
 
-
-def generate_guides(num, a5mode, sigmode):
-	vmargin = 6
-	hmargin = 5 if a5mode else 2.5
-	if a5mode:
-		x = hmargin
-	if sigmode:
-		x = 148.5 + hmargin
-	else:
-		x = 148.5 - hmargin
-
-	content = '2.83464567 0 0 2.83464567 0 0 cm 0.1 w 1 0 0 1 %f %d cm' % (x, vmargin)
-
-	n = num
-	h = 12 # mm
-	sp = float(210 - h - 2*vmargin)/(n-1) 
-
-	for i in range(n):
-		if i != 0:
-			content += "1 0 0 1 0 %f cm\n" % sp
-		content += """
-0 0 m
-0 %d l
-s
-0 2 m
-%c2 2 l
-s
-0 10 m
-%c2 10 l
-s
-""" % (h, ' ' if (a5mode or sigmode) else '-', ' ' if (a5mode or sigmode) else '-')
-
+def create_pdf(content):
 	template = """%%PDF-1.5
 %%%%%%%%%%
 1 0 obj  << /Kids [2 0 R] /Count 1 /Type /Pages >> endobj 
@@ -172,6 +141,57 @@ startxref
 	return template
 
 
+def generate_guides_longarm():
+	width = 1
+	content = '2.83464567 0 0 2.83464567 0 0 cm 0.1 w 1 0 0 1 148.5 21 cm\n'
+
+	for i in range(5):
+		if i != 0:
+			content += "1 0 0 1 0 42 cm\n"
+
+		content += """
+-%d 0 m
+%d 0 l
+s
+""" % (width, 2*width)
+
+	return create_pdf(content)
+
+
+def generate_guides(num, a5mode, sigmode):
+	vmargin = 6
+	hmargin = 5 if a5mode else 2.5
+	if a5mode:
+		x = hmargin
+	if sigmode:
+		x = 148.5 + hmargin
+	else:
+		x = 148.5 - hmargin
+
+	content = '2.83464567 0 0 2.83464567 0 0 cm 0.1 w 1 0 0 1 %f %d cm' % (x, vmargin)
+
+	n = num
+	h = 12 # mm
+	sp = float(210 - h - 2*vmargin)/(n-1) 
+
+	for i in range(n):
+		if i != 0:
+			content += "1 0 0 1 0 %f cm\n" % sp
+		content += """
+0 0 m
+0 %d l
+s
+0 2 m
+%c2 2 l
+s
+0 10 m
+%c2 10 l
+s
+""" % (h, ' ' if (a5mode or sigmode) else '-', ' ' if (a5mode or sigmode) else '-')
+
+	return create_pdf(content)
+
+
 def median(l):
 	l.sort()
 	return l[len(l)/2]
@@ -201,10 +221,11 @@ parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='
 parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
 parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
 parser.add_argument('-S', '--signature', dest='signature', type=int, action='store', default=None, help='use at most given number of sheets for one signature instead of producing one big signature')
+parser.add_argument('-l', '--longarm', action='store_true', default=False, help='generate staple guides for long-arm staplers')
 parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
 parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
 parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
-parser.add_argument('--version', action='version', version='%(prog)s 11.10a')
+parser.add_argument('--version', action='version', version='%(prog)s 14.10')
 parser.add_argument('FILE')
 args = parser.parse_args()
 
@@ -230,6 +251,7 @@ croponly = args.croponly
 bboxpage = args.bboxpage
 smartbbox = args.smartbbox
 signature = args.signature
+longarm = args.longarm
 
 tmpdir = tempfile.mkdtemp(prefix='mkbooklet-')
 os.chdir(tmpdir)
@@ -363,7 +385,10 @@ if not noguides and not croponly:
 	for i in range(pi.getNumPages()):
 		p = pi.getPage(i)
 		if i == 0:
-			grid = pyPdf.PdfFileReader(StringIO.StringIO(generate_guides(5, a5mode, bool(signature))))
+			if longarm:
+				grid = pyPdf.PdfFileReader(StringIO.StringIO(generate_guides_longarm()))
+			else:
+				grid = pyPdf.PdfFileReader(StringIO.StringIO(generate_guides(5, a5mode, bool(signature))))
 			p.mergePage(grid.getPage(0))
 		po.addPage(p)
 
