@@ -153,11 +153,8 @@ def create_pdf(content):
     output.write('0 7\n')
     output.write('0000000000 65535 f\n')
     output.write('0000000015 00000 n\n') # obj 1
-    output.write('%010d 00000 n\n' % page) # obj 2
-    output.write('%010d 00000 n\n' % resources) # obj 3
-    output.write('%010d 00000 n\n' % data) # obj 4
-    output.write('%010d 00000 n\n' % catalog) # obj 5
-    output.write('%010d 00000 n\n' % creator) # obj 6
+    for offset in (page, resources, data, catalog, creator):
+        output.write('%010d 00000 n\n' % offset)
     output.write('trailer\n')
     output.write('\n')
     output.write('<< /Info 6 0 R /Root 5 0 R /Size 7 >>\n')
