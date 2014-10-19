@@ -97,7 +97,9 @@ def create_pdf(content):
 
 	return output.getvalue()
 
-
+##
+# generate a page with staple guides suitable for long-arm staplers.
+#
 def generate_guides_longarm():
 	width = 1
 	content = '2.83464567 0 0 2.83464567 0 0 cm 0.1 w 1 0 0 1 148.5 21 cm\n'
@@ -256,7 +258,7 @@ parser.add_argument('-l', '--longarm', action='store_true', default=False, help=
 parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
 parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
 parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
-parser.add_argument('--version', action='version', version='%(prog)s 14.10')
+parser.add_argument('--version', action='version', version='%(prog)s 14.10b')
 parser.add_argument('FILE')
 args = parser.parse_args()
 
