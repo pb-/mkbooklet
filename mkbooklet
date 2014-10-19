@@ -171,13 +171,11 @@ def generate_guides_longarm():
 
 	for i in range(5):
 		if i != 0:
-			content += "1 0 0 1 0 42 cm\n"
+			content += '1 0 0 1 0 42 cm\n'
 
-		content += """
--%d 0 m
-%d 0 l
-s
-""" % (width, 2*width)
+		content += '-%d 0 m\n' % width
+		content += '%d 0 l\n' % (2 * width)
+		content += 's\n'
 
 	return create_pdf(content)
 
