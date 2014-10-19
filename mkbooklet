@@ -15,73 +15,6 @@ texcomp = "pdflatex"
 
 mm_in_pt = 2.83464567
 
-def pdfbbox(filename):
-	f = pyPdf.PdfFileReader(file(filename, 'rb'))
-	pages = f.getNumPages()
-
-	sizes = []
-
-	for i in range(pages):
-		p = f.getPage(i)
-		sizes.append((int(round(p.mediaBox.getUpperRight_x() - p.mediaBox.getLowerLeft_x())), int(round(p.mediaBox.getUpperRight_y() - p.mediaBox.getLowerLeft_y()))))
-
-	proc = subprocess.Popen(['/usr/bin/gs', '-q', '-dBATCH', '-dNOPAUSE', '-sDEVICE=bit', '-sOutputFile=%stdout', filename], stdout=subprocess.PIPE)
-
-	bboxs = []
-
-	for s in sizes:
-		(w,h) = s
-		bbox = (w-1, h-1, 0, 0)
-		
-		row_len = w / 8
-		if w % 8 > 0:
-			row_len += 1
-
-		fmt = 'b' * row_len
-
-		for y in range(h-1, -1, -1):
-			row = proc.stdout.read(row_len)
-			row = struct.unpack(fmt, row)
-			# use low resolution for x-positions. this is
-			# substantially faster and comes with an error
-			# of at most 8pt \approx 2.8mm
-			for x in range(0, w / 8):
-				if row[x] != 0:
-					bbox = (
-						min(bbox[0], x * 8),
-						min(bbox[1], y),
-						max(bbox[2], x * 8 + 8),
-						max(bbox[3], y + 2),
-					)
-
-		if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
-			bboxs.append(tuple(bbox))
-
-	return bboxs
-
-
-def make_sig_sequence(pages, max_sig_sheets=5):
-	def pg(k,n,o):
-		return '{}' if k > n else str(k+o)
-
-	sequence = []
-	max_sig_size = max_sig_sheets * 4
-	sigs = pages // max_sig_size + min(1, pages % max_sig_size)
-	for s in range(sigs):
-		off = s * max_sig_size
-		sig_size = min(max_sig_size, pages - off)
-		sig_sheets = sig_size // 4 + min(1, sig_size % 4)
-
-		print s, off, sig_size, sig_sheets
-
-		for ss in range(sig_sheets):
-			sequence.append(pg(sig_sheets*4 - 2*ss, sig_size, off))
-			sequence.append(pg(2*ss+1, sig_size, off))
-			sequence.append(pg(2*ss+2, sig_size, off))
-			sequence.append(pg(sig_sheets*4 - 2*ss - 1, sig_size, off))
-
-	return ','.join(sequence)
-
 ##
 # create a one-page pdf (blank) with the specified size (postscript points)
 #
@@ -220,6 +153,75 @@ def generate_guides(num, a5mode, right):
 		content += 's\n'
 
 	return create_pdf(content)
+
+
+def pdfbbox(filename):
+	f = pyPdf.PdfFileReader(file(filename, 'rb'))
+	pages = f.getNumPages()
+
+	sizes = []
+
+	for i in range(pages):
+		p = f.getPage(i)
+		sizes.append((int(round(p.mediaBox.getUpperRight_x() - p.mediaBox.getLowerLeft_x())), int(round(p.mediaBox.getUpperRight_y() - p.mediaBox.getLowerLeft_y()))))
+
+	proc = subprocess.Popen(['/usr/bin/gs', '-q', '-dBATCH', '-dNOPAUSE', '-sDEVICE=bit', '-sOutputFile=%stdout', filename], stdout=subprocess.PIPE)
+
+	bboxs = []
+
+	for s in sizes:
+		(w,h) = s
+		bbox = (w-1, h-1, 0, 0)
+		
+		row_len = w / 8
+		if w % 8 > 0:
+			row_len += 1
+
+		fmt = 'b' * row_len
+
+		for y in range(h-1, -1, -1):
+			row = proc.stdout.read(row_len)
+			row = struct.unpack(fmt, row)
+			# use low resolution for x-positions. this is
+			# substantially faster and comes with an error
+			# of at most 8pt \approx 2.8mm
+			for x in range(0, w / 8):
+				if row[x] != 0:
+					bbox = (
+						min(bbox[0], x * 8),
+						min(bbox[1], y),
+						max(bbox[2], x * 8 + 8),
+						max(bbox[3], y + 2),
+					)
+
+		if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
+			bboxs.append(tuple(bbox))
+
+	return bboxs
+
+
+def make_sig_sequence(pages, max_sig_sheets=5):
+	def pg(k,n,o):
+		return '{}' if k > n else str(k+o)
+
+	sequence = []
+	max_sig_size = max_sig_sheets * 4
+	sigs = pages // max_sig_size + min(1, pages % max_sig_size)
+	for s in range(sigs):
+		off = s * max_sig_size
+		sig_size = min(max_sig_size, pages - off)
+		sig_sheets = sig_size // 4 + min(1, sig_size % 4)
+
+		print s, off, sig_size, sig_sheets
+
+		for ss in range(sig_sheets):
+			sequence.append(pg(sig_sheets*4 - 2*ss, sig_size, off))
+			sequence.append(pg(2*ss+1, sig_size, off))
+			sequence.append(pg(2*ss+2, sig_size, off))
+			sequence.append(pg(sig_sheets*4 - 2*ss - 1, sig_size, off))
+
+	return ','.join(sequence)
+
 
 
 def median(l):
