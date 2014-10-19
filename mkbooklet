@@ -82,34 +82,42 @@ def make_sig_sequence(pages, max_sig_sheets=5):
 
 	return ','.join(sequence)
 
+##
+# create a one-page pdf (blank) with the specified size (postscript points)
+#
+def create_pdf_empty(width, height):
+    output = StringIO.StringIO()
 
-def mkemptypage(w, h):
-	ws = '%f' % w
-	hs = '%f' % h
-	l = len(ws) + len(hs)
+    output.write('%PDF-1.1\n')
+    output.write('%\xc3\xad\xc3\xac\xc2\xa6"\n')
+    output.write('\n')
 
-	tpl = '''%%PDF-1.1
-%%\xc3\xad\xc3\xac\xc2\xa6"
+    catalog = output.tell()
+    output.write('1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n')
 
-1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
-2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 %s %s] >> endobj
-3 0 obj << /Type /Page /Parent 2 0 R /Resources << >> /Contents [] >> endobj
+    pages = output.tell()
+    output.write('2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 %f %f] >> endobj\n' % (width, height))
 
-xref
-0 4
-0000000000 65535 f 
-0000000019 00000 n 
-0000000068 00000 n 
-%010d 00000 n 
-trailer << /Root 1 0 R /Size 4 >>
-startxref
-%d
-%%%%EOF'''
+    page = output.tell()
+    output.write('3 0 obj << /Type /Page /Parent 2 0 R /Resources << >> /Contents [] >> endobj\n')
+    output.write('\n')
 
-	return tpl % (ws, hs, 143 + l, 221 + l)
+    xref = output.tell()
+    output.write('xref\n')
+    output.write('0 4\n')
+    output.write('0000000000 65535 f\n')
+    for offset in (catalog, pages, page):
+        output.write('%010d 00000 n\n' % offset)
+    output.write('trailer << /Root 1 0 R /Size 4 >>\n')
+    output.write('startxref\n')
+    output.write('%d\n' % xref)
+    output.write('%%EOF\n')
+
+    return output.getvalue()
+
 
 ##
-# create a one-page pdf with specified content on the page.
+# create a one-page pdf (A4) with specified content on the page.
 #
 def create_pdf(content):
     output = StringIO.StringIO()
@@ -352,7 +360,7 @@ if not nocrop:
 		po.addPage(p)
 
 	# extra blank pages
-	bi = pyPdf.PdfFileReader(StringIO.StringIO(mkemptypage(cbox[2]-cbox[0],cbox[3]-cbox[1])))
+	bi = pyPdf.PdfFileReader(StringIO.StringIO(create_pdf_empty(cbox[2]-cbox[0],cbox[3]-cbox[1])))
 	for i in range(args.epages):
 		po.addPage(bi.getPage(0))
 
