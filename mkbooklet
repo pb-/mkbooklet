@@ -108,37 +108,56 @@ startxref
 
 	return tpl % (ws, hs, 143 + l, 221 + l)
 
+##
+# create a one-page pdf with specified content on the page.
+#
 def create_pdf(content):
-	template = """%%PDF-1.5
-%%%%%%%%%%
-1 0 obj  << /Kids [2 0 R] /Count 1 /Type /Pages >> endobj 
-3 0 obj  << >> endobj 
-4 0 obj  << /Length %d >>
-stream
-q
-Q
-%s
-endstream 
-endobj 
-2 0 obj  << /Group  << /CS /DeviceRGB /Type /Group /S /Transparency >> /Parent 1 0 R /Resources 3 0 R /MediaBox [0 0 841.889764 595.275591]                  /Contents 4 0 R /Type /Page >> endobj 
-5 0 obj  << /Pages 1 0 R /Type /Catalog >> endobj 
-6 0 obj  << /Creator (mkbooklet http://github.com/pb-/mkbooklet) /Producer (mkbooklet http://github.com/pb-/mkbooklet) >> endobj
-xref
-0 7
-0000000000 65535 f 
-0000000015 00000 n 
-%010d 00000 n 
-0000000074 00000 n 
-0000000097 00000 n 
-%010d 00000 n 
-%010d 00000 n 
-trailer
+    output = StringIO.StringIO()
 
-<< /Info 6 0 R /Root 5 0 R /Size 7 >>
-startxref
-%d
-%%%%EOF""" % (4+len(content), content, 155+len(content), 351+len(content), 402+len(content), 531+len(content))
-	return template
+    output.write('%PDF-1.5\n')
+    output.write('%%%%%\n')
+    output.write('1 0 obj  << /Kids [2 0 R] /Count 1 /Type /Pages >> endobj\n')
+
+    resources = output.tell()
+    output.write('3 0 obj  << >> endobj\n')
+
+    data = output.tell()
+    output.write('4 0 obj  << /Length %d >>\n' % (4 + len(content)))
+    output.write('stream\n')
+    output.write('q\n')
+    output.write('Q\n')
+    output.write(content)
+    output.write('\n')
+    output.write('endstream\n')
+    output.write('endobj\n')
+
+    page = output.tell()
+    output.write('2 0 obj  << /Group  << /CS /DeviceRGB /Type /Group /S /Transparency >> /Parent 1 0 R /Resources 3 0 R /MediaBox [0 0 841.889764 595.275591] /Contents 4 0 R /Type /Page >> endobj\n')
+
+    catalog = output.tell()
+    output.write('5 0 obj  << /Pages 1 0 R /Type /Catalog >> endobj\n')
+
+    creator = output.tell()
+    output.write('6 0 obj  << /Creator (mkbooklet http://github.com/pb-/mkbooklet) /Producer (mkbooklet http://github.com/pb-/mkbooklet) >> endobj\n')
+
+    xref = output.tell()
+    output.write('xref\n')
+    output.write('0 7\n')
+    output.write('0000000000 65535 f\n')
+    output.write('0000000015 00000 n\n') # obj 1
+    output.write('%010d 00000 n\n' % page) # obj 2
+    output.write('%010d 00000 n\n' % resources) # obj 3
+    output.write('%010d 00000 n\n' % data) # obj 4
+    output.write('%010d 00000 n\n' % catalog) # obj 5
+    output.write('%010d 00000 n\n' % creator) # obj 6
+    output.write('trailer\n')
+    output.write('\n')
+    output.write('<< /Info 6 0 R /Root 5 0 R /Size 7 >>\n')
+    output.write('startxref\n')
+    output.write('%d\n' % xref)
+    output.write('%%EOF')
+
+    return output.getvalue()
 
 
 def generate_guides_longarm():
@@ -195,7 +214,6 @@ s
 def median(l):
 	l.sort()
 	return l[len(l)/2]
-
 
 parser = argparse.ArgumentParser(description='Prepare PDF files for booklet printing.', formatter_class=argparse.RawDescriptionHelpFormatter, epilog="""
 Inner and outer margins have the following meanings.
