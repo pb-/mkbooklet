@@ -46,7 +46,7 @@ def create_pdf_empty(width, height):
 	output.write('%d\n' % xref)
 	output.write('%%EOF\n')
 
-	return output.getvalue()
+	return output
 
 
 ##
@@ -95,7 +95,7 @@ def create_pdf(content):
 	output.write('%d\n' % xref)
 	output.write('%%EOF')
 
-	return output.getvalue()
+	return output
 
 ##
 # generate a page with staple guides suitable for long-arm staplers.
@@ -258,7 +258,7 @@ parser.add_argument('-l', '--longarm', action='store_true', default=False, help=
 parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
 parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
 parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
-parser.add_argument('--version', action='version', version='%(prog)s 14.10b')
+parser.add_argument('--version', action='version', version='%(prog)s 14.10c')
 parser.add_argument('FILE')
 args = parser.parse_args()
 
@@ -367,7 +367,7 @@ if not nocrop:
 		po.addPage(p)
 
 	# extra blank pages
-	bi = pyPdf.PdfFileReader(StringIO.StringIO(create_pdf_empty(cbox[2]-cbox[0],cbox[3]-cbox[1])))
+	bi = pyPdf.PdfFileReader(create_pdf_empty(cbox[2]-cbox[0],cbox[3]-cbox[1]))
 	for i in range(args.epages):
 		po.addPage(bi.getPage(0))
 
@@ -413,9 +413,9 @@ if not noguides and not croponly:
 		p = pi.getPage(i)
 		if i == 0:
 			if longarm:
-				grid = pyPdf.PdfFileReader(StringIO.StringIO(generate_guides_longarm()))
+				grid = pyPdf.PdfFileReader(generate_guides_longarm())
 			else:
-				grid = pyPdf.PdfFileReader(StringIO.StringIO(generate_guides(5, a5mode, bool(signature))))
+				grid = pyPdf.PdfFileReader(generate_guides(5, a5mode, bool(signature)))
 			p.mergePage(grid.getPage(0))
 		po.addPage(p)
 
