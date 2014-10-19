@@ -376,37 +376,31 @@ if not nocrop:
 	outputStream.close()
 
 
-tex = file("sig.tex", "w")
 if not a5mode:
 	if not croponly:
+		docopt = 'a4paper,landscape'
 		if signature:
-			tex.write("""\\documentclass[a4paper,landscape]{article}
-	\\usepackage{pdfpages}
-	\\begin{document}
-	\\includepdf[pages={%s},nup=2x1,delta=%dpt 0]{%s}
-	\\end{document}""" % (make_sig_sequence(pages, signature), foldmargin, pdf_in if nocrop else 'cropped.pdf'))
+			includepdf = [('pages={%s},nup=2x1,delta=%dpt 0' % (make_sig_sequence(pages, signature), foldmargin), pdf_in if nocrop else 'cropped.pdf')]
 		else:
-			tex.write("""\\documentclass[a4paper,landscape]{article}
-	\\usepackage{pdfpages}
-	\\begin{document}
-	\\includepdf[pages=-,booklet=true,delta=%dpt 0]{%s}
-	\\end{document}""" % (foldmargin, pdf_in if nocrop else 'cropped.pdf'))
+			includepdf = [('pages=-,booklet=true,delta=%dpt 0' % foldmargin, pdf_in if nocrop else 'cropped.pdf')]
 	else:
-		tex.write("""\\documentclass[a4paper]{article}
-	\\usepackage{pdfpages}
-	\\begin{document}
-	\\includepdf[pages=-]{cropped.pdf}
-	\\end{document}""")
-	tex.close()
+		docopt = 'a4paper'
+		includepdf = [('pages=-', 'cropped.pdf')]
 else:
-	tex.write("""\\documentclass[a5paper]{article}
-	\\usepackage{pdfpages}
-	\\begin{document}""")
+	docopt = 'a5paper'
+	includepdf = []
 	for p in range(pages + args.epages):
-		tex.write('\\includepdf[pages=%d,offset=%d 0,scale=%f]{cropped.pdf}' % ((p+1), (foldmargin/2 -margins/2 if (p%2==0) else margins/2 - foldmargin/2), s_page))
-	tex.write('\\end{document}')
+		includepdf.append(('pages=%d,offset=%d 0,scale=%f' % ((p+1), (foldmargin/2 -margins/2 if (p%2==0) else margins/2 - foldmargin/2), s_page), 'cropped.pdf'))
 
+tex = file("sig.tex", "w")
+tex.write('\\documentclass[%s]{article}\n' % docopt)
+tex.write('\\usepackage{pdfpages}\n')
+tex.write('\\begin{document}\n')
+for opt, src in includepdf:
+	tex.write('\\includepdf[%s]{%s}\n' % (opt, src))
+tex.write('\\end{document}\n')
 tex.close()
+
 os.system(texcomp + ' sig.tex')
 
 
