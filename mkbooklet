@@ -179,37 +179,45 @@ def generate_guides_longarm():
 
 	return create_pdf(content)
 
-
-def generate_guides(num, a5mode, sigmode):
+##
+# generate a page with staple guides.
+# @param a5mode If true, sets the guides further away from the margin
+# @param right Set the guides on the right half of the page (as opposed to left)
+#
+def generate_guides(num, a5mode, right):
 	vmargin = 6
 	hmargin = 5 if a5mode else 2.5
 	if a5mode:
 		x = hmargin
-	if sigmode:
+	if right:
 		x = 148.5 + hmargin
 	else:
 		x = 148.5 - hmargin
 
-	content = '2.83464567 0 0 2.83464567 0 0 cm 0.1 w 1 0 0 1 %f %d cm' % (x, vmargin)
+	content = '2.83464567 0 0 2.83464567 0 0 cm 0.1 w 1 0 0 1 %f %d cm\n' % (x, vmargin)
 
 	n = num
 	h = 12 # mm
 	sp = float(210 - h - 2*vmargin)/(n-1) 
 
+	sign = ' ' if (a5mode or right) else '-'
+
 	for i in range(n):
 		if i != 0:
 			content += "1 0 0 1 0 %f cm\n" % sp
-		content += """
-0 0 m
-0 %d l
-s
-0 2 m
-%c2 2 l
-s
-0 10 m
-%c2 10 l
-s
-""" % (h, ' ' if (a5mode or sigmode) else '-', ' ' if (a5mode or sigmode) else '-')
+
+		# vertical bar
+		content += '0 0 m\n'
+		content += '0 %d l\n' % h
+		content += 's\n'
+
+		content += '0 2 m\n'
+		content += '%c2 2 l\n' % sign
+		content += 's\n'
+
+		content += '0 10 m\n'
+		content += '%c2 10 l\n' % sign
+		content += 's\n'
 
 	return create_pdf(content)
 
