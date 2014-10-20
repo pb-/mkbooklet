@@ -26,21 +26,26 @@ def create_pdf_empty(width, height):
 	output.write('\n')
 
 	catalog = output.tell()
-	output.write('1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n')
+	output.write('1 0 obj\n')
+	output.write('<< /Type /Catalog /Pages 2 0 R >>\n')
+	output.write('endobj\n')
 
 	pages = output.tell()
-	output.write('2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 %f %f] >> endobj\n' % (width, height))
+	output.write('2 0 obj\n')
+	output.write('<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 %f %f] >>\n' % (width, height))
+	output.write('endobj\n')
 
 	page = output.tell()
-	output.write('3 0 obj << /Type /Page /Parent 2 0 R /Resources << >> /Contents [] >> endobj\n')
-	output.write('\n')
+	output.write('3 0 obj\n')
+	output.write('<< /Type /Page /Parent 2 0 R /Resources << >> /Contents [] >>\n')
+	output.write('endobj\n')
 
 	xref = output.tell()
 	output.write('xref\n')
 	output.write('0 4\n')
-	output.write('0000000000 65535 f\n')
+	output.write('0000000000 65535 f \n')
 	for offset in (catalog, pages, page):
-		output.write('%010d 00000 n\n' % offset)
+		output.write('%010d 00000 n \n' % offset)
 	output.write('trailer << /Root 1 0 R /Size 4 >>\n')
 	output.write('startxref\n')
 	output.write('%d\n' % xref)
@@ -56,14 +61,21 @@ def create_pdf(content):
 	output = StringIO.StringIO()
 
 	output.write('%PDF-1.5\n')
-	output.write('%%%%%\n')
-	output.write('1 0 obj  << /Kids [2 0 R] /Count 1 /Type /Pages >> endobj\n')
+	output.write('%\xc3\xad\xc3\xac\xc2\xa6"\n')
+
+	pages = output.tell()
+	output.write('1 0 obj\n')
+	output.write('<< /Kids [2 0 R] /Count 1 /Type /Pages >>\n')
+	output.write('endobj\n')
 
 	resources = output.tell()
-	output.write('3 0 obj  << >> endobj\n')
+	output.write('3 0 obj\n')
+	output.write('<< >>\n')
+	output.write('endobj\n')
 
 	data = output.tell()
-	output.write('4 0 obj  << /Length %d >>\n' % (4 + len(content)))
+	output.write('4 0 obj\n')
+	output.write('<< /Length %d >>\n' % (4 + len(content)))
 	output.write('stream\n')
 	output.write('q\n')
 	output.write('Q\n')
@@ -73,21 +85,26 @@ def create_pdf(content):
 	output.write('endobj\n')
 
 	page = output.tell()
-	output.write('2 0 obj  << /Group  << /CS /DeviceRGB /Type /Group /S /Transparency >> /Parent 1 0 R /Resources 3 0 R /MediaBox [0 0 841.889764 595.275591] /Contents 4 0 R /Type /Page >> endobj\n')
+	output.write('2 0 obj\n')
+	output.write('<< /Group  << /CS /DeviceRGB /Type /Group /S /Transparency >> /Parent 1 0 R /Resources 3 0 R /MediaBox [0 0 841.889764 595.275591] /Contents 4 0 R /Type /Page >>\n')
+	output.write('endobj\n')
 
 	catalog = output.tell()
-	output.write('5 0 obj  << /Pages 1 0 R /Type /Catalog >> endobj\n')
+	output.write('5 0 obj\n')
+	output.write('<< /Pages 1 0 R /Type /Catalog >>\n')
+	output.write('endobj\n')
 
 	creator = output.tell()
-	output.write('6 0 obj  << /Creator (mkbooklet http://github.com/pb-/mkbooklet) /Producer (mkbooklet http://github.com/pb-/mkbooklet) >> endobj\n')
+	output.write('6 0 obj\n')
+	output.write('<< /Creator (mkbooklet http://github.com/pb-/mkbooklet) /Producer (mkbooklet http://github.com/pb-/mkbooklet) >>\n')
+	output.write('endobj\n')
 
 	xref = output.tell()
 	output.write('xref\n')
 	output.write('0 7\n')
-	output.write('0000000000 65535 f\n')
-	output.write('0000000015 00000 n\n') # obj 1
-	for offset in (page, resources, data, catalog, creator):
-		output.write('%010d 00000 n\n' % offset)
+	output.write('0000000000 65535 f \n')
+	for offset in (pages, page, resources, data, catalog, creator):
+		output.write('%010d 00000 n \n' % offset)
 	output.write('trailer\n')
 	output.write('\n')
 	output.write('<< /Info 6 0 R /Root 5 0 R /Size 7 >>\n')
