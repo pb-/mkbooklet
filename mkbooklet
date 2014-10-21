@@ -13,7 +13,11 @@ import StringIO
 viewer = "evince"
 texcomp = "pdflatex"
 
-mm_in_pt = 2.83464567
+##
+# convert millimeters to postscript points
+#
+def mmToPt(mm):
+	return 2.83464567 * mm
 
 ##
 # create a one-page pdf (blank) with the specified size (postscript points)
@@ -173,7 +177,9 @@ def generate_guides(num, a5mode, right):
 
 	return create_pdf(content)
 
-
+##
+# obtain the true bounding box for printed data of the given pdf file.
+#
 def pdfbbox(filename):
 	f = pyPdf.PdfFileReader(file(filename, 'rb'))
 	pages = f.getNumPages()
@@ -219,6 +225,11 @@ def pdfbbox(filename):
 	return bboxs
 
 
+##
+# compute the page sequence for signature binding
+# @param pages number of pages in total
+# @param max_sig_sheets maximum number of sheets per signature
+#
 def make_sig_sequence(pages, max_sig_sheets=5):
 	def pg(k,n,o):
 		return '{}' if k > n else str(k+o)
@@ -247,202 +258,215 @@ def median(l):
 	l.sort()
 	return l[len(l)/2]
 
-parser = argparse.ArgumentParser(description='Prepare PDF files for booklet printing.', formatter_class=argparse.RawDescriptionHelpFormatter, epilog="""
-Inner and outer margins have the following meanings.
+class Mkbooklet(object):
+	a4lheight = 595
+	a4lwidth = 841
+	a5height = 595
+	a5width = 419
 
-+---------------+
-|###############|
-|#    @@:@@    #|
-|# P1 @@:@@ P2 #|
-|#    @@:@@    #|
-|###############|
-+---------------+
+	def parse_args(self, args):
+		epilog = (	"Inner and outer margins have the following meanings.\n"
+					"\n"
+					"+---------------+\n"
+					"|###############|\n"
+					"|#    @@:@@    #|\n"
+					"|# P1 @@:@@ P2 #|\n"
+					"|#    @@:@@    #|\n"
+					"|###############|\n"
+					"+---------------+\n"
+					"\n"
+					"'#' is the outer margin (both dimensions) along the outline of\n"
+					"    the phyiscal paper.\n"
+					"'@' is the inner fold margin (horizontally) between the actual\n"
+					"    content and the center of the paper indicated by ':'.\n")
+		parser = argparse.ArgumentParser(description='Prepare PDF files for booklet printing.',
+			formatter_class=argparse.RawDescriptionHelpFormatter, epilog=epilog)
 
-'#' is the outer margin (both dimensions) along the outline of
-    the phyiscal paper.
-'@' is the inner fold margin (horizontally) between the actual
-    content and the center of the paper indicated by ':'.
-""")
-parser.add_argument('-5', '--a5', action='store_true', default=False, help='produce single A5 pages instead of 2-up A4')
-parser.add_argument('-o', '--outer-margins', dest='margins', default='default', type=str, help='use given value (unit: millimeters) for the minimal outer margins, see below')
-parser.add_argument('-i', '--inner-margins', dest='imargins', default='default', type=str, help='use given value (unit: millimeters) for the minimal inner (fold)margins, see below')
-parser.add_argument('-e', '--extrapages', dest='epages', default=0, type=int, help='add given number of extra blank pages at the end of the document')
-parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
-parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
-parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
-parser.add_argument('-S', '--signature', dest='signature', type=int, action='store', default=None, help='use at most given number of sheets for one signature instead of producing one big signature')
-parser.add_argument('-l', '--longarm', action='store_true', default=False, help='generate staple guides for long-arm staplers')
-parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
-parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
-parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
-parser.add_argument('--version', action='version', version='%(prog)s 14.10c')
-parser.add_argument('FILE')
-args = parser.parse_args()
+		parser.add_argument('--version', action='version', version='%(prog)s 14.10c')
+		parser.add_argument('-5', '--a5', action='store_true', default=False, help='produce single A5 pages instead of 2-up A4')
+		parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
+		parser.add_argument('-S', '--signature', dest='signature', type=int, action='store', default=None, help='use at most given number of sheets for one signature instead of producing one big signature')
+		parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
+		parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
+		parser.add_argument('-e', '--extrapages', dest='epages', default=0, type=int, help='add given number of extra blank pages at the end of the document')
+		parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
+		parser.add_argument('-i', '--inner-margins', dest='imargins', default='default', type=str, help='use given value (unit: millimeters) for the minimal inner (fold)margins, see below')
+		parser.add_argument('-l', '--longarm', action='store_true', default=False, help='generate staple guides for long-arm staplers')
+		parser.add_argument('-o', '--outer-margins', dest='margins', default='default', type=str, help='use given value (unit: millimeters) for the minimal outer margins, see below')
+		parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
+		parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
+		parser.add_argument('FILE')
 
-pdf_in = os.path.abspath(args.FILE)
-a5mode = args.a5
-margins = 6 if args.margins == 'default' else int(args.margins)
-if args.imargins == 'default':
-	if a5mode:
-		imargins = 16
-	else:
-		imargins = 22
-else:
-	imargins = int(args.imargins)
+		self.args = parser.parse_args()
+		self.pdf_in = os.path.abspath(self.args.FILE)
 
-if not a5mode:
-	imargins = 2 * (imargins - margins)
-
-margins = int(round(margins * mm_in_pt))
-foldmargin = int(round(imargins * mm_in_pt))
-nocrop = args.nocrop
-noguides = args.noguides
-croponly = args.croponly
-bboxpage = args.bboxpage
-smartbbox = args.smartbbox
-signature = args.signature
-longarm = args.longarm
-
-tmpdir = tempfile.mkdtemp(prefix='mkbooklet-')
-os.chdir(tmpdir)
-
-# A4 in postscript points: 841 x 595 
-a4lheight = 595
-a4lwidth = 841
-a5height = 595
-a5width = 419
-
-if not nocrop:
-	if not args.bbox:
-		# determine actual (printed) bounding box
-		bbox = pdfbbox(pdf_in)
-
-		if bboxpage:
-			bbox = bbox[bboxpage-1]
-		elif smartbbox:
-			bboxs = [None] * 4
-			for i in range(4):
-				bboxs[i] = median(map(lambda x: x[i], bbox))
-			bbox = tuple(bboxs)
-		else:
-			bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
-	else:
-		# x1,y1,x2,y2
-		# x,y+w,h
-		m = re.match('^(\\d+),(\\d+)(,|\\+)(\\d+),(\\d+)$', args.bbox)
-		if not m:
-			print 'Invalid bbox format, use x1,y1,x2,y2 or x,y+w,h'
-			shutil.rmtree(tmpdir)
-			sys.exit(-1)
-		else:
-			bbox = (int(m.group(1)), int(m.group(2)), int(m.group(4)), int(m.group(5)))
-			if m.group(3) == '+':
-				bbox = (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
-
-	w = bbox[2] - bbox[0]
-	h = bbox[3] - bbox[1]
-
-	if not a5mode:
-		maxw = (a4lwidth - foldmargin - 4 * margins) / 2
-		maxh = a4lheight - 2 * margins
-		s = float(maxw) / w
-		if s * h > maxh:
-			# exceeds height, scaling will free up more horizontal space. make sure we use this space where it makes sense (i.e., on the folding edge)
-			s = float(maxh) / h
-			foldmargin = int(a4lwidth - s * w * 2 - 4 * margins) 
-
-		sm = int(margins / s)
-		cbox = (bbox[0] - sm, bbox[1] - sm, bbox[2] + sm, bbox[3] + sm)
-	else:
-		s_full = float(a5width) / w
-		if s_full * h > a5height:
-			s_full = float(a5height) / h
-
-		s_page = 1
-		if s_full * w > a5width - foldmargin - margins:
-			s_page = float(a5width - foldmargin - margins) / (s_full * w)
-		if s_page * s_full * h > a5height - 2 * margins:
-			s_page = float(a5height - 2 * margins) / (s_full * h)
-			foldmargin = int(a5width - margins - s_page * s_full * w)
-		cbox = bbox
-
-	# crop crop
-	pi = pyPdf.PdfFileReader(file(pdf_in, "rb"))
-	pages = pi.getNumPages()
-	po = pyPdf.PdfFileWriter()
-
-	for i in range(pages):
-		p = pi.getPage(i)
-		
-		p.cropBox.lowerLeft = (cbox[0] + p.mediaBox.lowerLeft[0], cbox[1] + p.mediaBox.lowerLeft[1])
-		p.cropBox.upperRight = (cbox[2] + p.mediaBox.lowerLeft[0], cbox[3] + p.mediaBox.lowerLeft[1])
-
-		p.bleedBox = p.cropBox
-		p.trimBox = p.cropBox
-		p.artBox = p.cropBox
-
-		po.addPage(p)
-
-	# extra blank pages
-	bi = pyPdf.PdfFileReader(create_pdf_empty(cbox[2]-cbox[0],cbox[3]-cbox[1]))
-	for i in range(args.epages):
-		po.addPage(bi.getPage(0))
-
-	outputStream = file('cropped.pdf', 'wb')
-	po.write(outputStream)
-	outputStream.close()
-
-
-if not a5mode:
-	if not croponly:
-		docopt = 'a4paper,landscape'
-		if signature:
-			includepdf = [('pages={%s},nup=2x1,delta=%dpt 0' % (make_sig_sequence(pages, signature), foldmargin), pdf_in if nocrop else 'cropped.pdf')]
-		else:
-			includepdf = [('pages=-,booklet=true,delta=%dpt 0' % foldmargin, pdf_in if nocrop else 'cropped.pdf')]
-	else:
-		docopt = 'a4paper'
-		includepdf = [('pages=-', 'cropped.pdf')]
-else:
-	docopt = 'a5paper'
-	includepdf = []
-	for p in range(pages + args.epages):
-		includepdf.append(('pages=%d,offset=%d 0,scale=%f' % ((p+1), (foldmargin/2 -margins/2 if (p%2==0) else margins/2 - foldmargin/2), s_page), 'cropped.pdf'))
-
-tex = file("sig.tex", "w")
-tex.write('\\documentclass[%s]{article}\n' % docopt)
-tex.write('\\usepackage{pdfpages}\n')
-tex.write('\\begin{document}\n')
-for opt, src in includepdf:
-	tex.write('\\includepdf[%s]{%s}\n' % (opt, src))
-tex.write('\\end{document}\n')
-tex.close()
-
-os.system(texcomp + ' sig.tex')
-
-
-# apply folding/stapling guides, if available
-if not noguides and not croponly:
-	pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
-	po = pyPdf.PdfFileWriter()
-
-	for i in range(pi.getNumPages()):
-		p = pi.getPage(i)
-		if i == 0:
-			if longarm:
-				grid = pyPdf.PdfFileReader(generate_guides_longarm())
+		self.args.margins = 6 if self.args.margins == 'default' else int(self.args.margins)
+		if self.args.imargins == 'default':
+			if self.args.a5:
+				self.args.imargins = 16
 			else:
-				grid = pyPdf.PdfFileReader(generate_guides(5, a5mode, bool(signature)))
-			p.mergePage(grid.getPage(0))
-		po.addPage(p)
+				self.args.imargins = 22
+		else:
+			self.args.imargins = int(self.args.imargins)
 
-	outputStream = file('sigs.pdf', 'wb')
-	po.write(outputStream)
-	outputStream.close()
+		if not self.args.a5:
+			self.args.imargins = 2 * (self.args.imargins - self.args.margins)
 
-	os.system(viewer + ' sigs.pdf')
-else:
-	os.system(viewer + ' sig.pdf')
+		self.args.margins = int(round(mmToPt(self.args.margins)))
+		self.args.imargins = int(round(mmToPt(self.args.imargins)))
+	
+	def setUp(self):
+		self.tmpdir = tempfile.mkdtemp(prefix='mkbooklet-')
+		os.chdir(self.tmpdir)
 
-print 'cleanup:', tmpdir
-shutil.rmtree(tmpdir)
+	def tearDown(self):
+		shutil.rmtree(self.tmpdir)
+
+	def crop(self):
+		if not self.args.bbox:
+			# determine actual (printed) bounding box
+			bbox = pdfbbox(self.pdf_in)
+
+			if self.args.bboxpage:
+				bbox = bbox[self.args.bboxpage-1]
+			elif self.args.smartbbox:
+				bboxs = [None] * 4
+				for i in range(4):
+					bboxs[i] = median(map(lambda x: x[i], bbox))
+				bbox = tuple(bboxs)
+			else:
+				bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
+		else:
+			# x1,y1,x2,y2
+			# x,y+w,h
+			m = re.match('^(\\d+),(\\d+)(,|\\+)(\\d+),(\\d+)$', self.args.bbox)
+			if not m:
+				print 'Invalid bbox format, use x1,y1,x2,y2 or x,y+w,h'
+				self.tearDown()
+				sys.exit(-1)
+			else:
+				bbox = (int(m.group(1)), int(m.group(2)), int(m.group(4)), int(m.group(5)))
+				if m.group(3) == '+':
+					bbox = (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
+
+		w = bbox[2] - bbox[0]
+		h = bbox[3] - bbox[1]
+
+		if not self.args.a5:
+			maxw = (self.a4lwidth - self.args.imargins - 4 * self.args.margins) / 2
+			maxh = self.a4lheight - 2 * self.args.margins
+			s = float(maxw) / w
+			if s * h > maxh:
+				# exceeds height, scaling will free up more horizontal space. make sure we use this space where it makes sense (i.e., on the folding edge)
+				s = float(maxh) / h
+				self.args.imargins = int(self.a4lwidth - s * w * 2 - 4 * self.args.margins) 
+
+			sm = int(self.args.margins / s)
+			cbox = (bbox[0] - sm, bbox[1] - sm, bbox[2] + sm, bbox[3] + sm)
+		else:
+			s_full = float(self.a5width) / w
+			if s_full * h > self.a5height:
+				s_full = float(self.a5height) / h
+
+			self.s_page = 1
+			if s_full * w > self.a5width - self.args.imargins - self.args.margins:
+				self.s_page = float(self.a5width - self.args.imargins - self.args.margins) / (s_full * w)
+			if self.s_page * s_full * h > self.a5height - 2 * self.args.margins:
+				self.s_page = float(self.a5height - 2 * self.args.margins) / (s_full * h)
+				self.args.imargins = int(self.a5width - self.args.margins - self.s_page * s_full * w)
+			cbox = bbox
+
+		# crop crop
+		pi = pyPdf.PdfFileReader(file(self.pdf_in, "rb"))
+		self.pages = pi.getNumPages()
+		po = pyPdf.PdfFileWriter()
+
+		for i in range(self.pages):
+			p = pi.getPage(i)
+			
+			p.cropBox.lowerLeft = (cbox[0] + p.mediaBox.lowerLeft[0], cbox[1] + p.mediaBox.lowerLeft[1])
+			p.cropBox.upperRight = (cbox[2] + p.mediaBox.lowerLeft[0], cbox[3] + p.mediaBox.lowerLeft[1])
+
+			p.bleedBox = p.cropBox
+			p.trimBox = p.cropBox
+			p.artBox = p.cropBox
+
+			po.addPage(p)
+
+		# extra blank pages
+		bi = pyPdf.PdfFileReader(create_pdf_empty(cbox[2]-cbox[0],cbox[3]-cbox[1]))
+		for i in range(self.args.epages):
+			po.addPage(bi.getPage(0))
+
+		outputStream = file('cropped.pdf', 'wb')
+		po.write(outputStream)
+		outputStream.close()
+
+		self.pdf_in = 'cropped.pdf'
+
+	def build_booklet(self):
+		if not self.args.a5:
+			if not self.args.croponly:
+				docopt = 'a4paper,landscape'
+				if self.args.signature:
+					includepdf = [('pages={%s},nup=2x1,delta=%dpt 0' % (make_sig_sequence(self.pages, self.args.signature), self.args.imargins), self.pdf_in)]
+				else:
+					includepdf = [('pages=-,booklet=true,delta=%dpt 0' % self.args.imargins, self.pdf_in)]
+			else:
+				docopt = 'a4paper'
+				includepdf = [('pages=-', 'cropped.pdf')]
+		else:
+			docopt = 'a5paper'
+			includepdf = []
+			for p in range(pages + self.args.epages):
+				includepdf.append(('pages=%d,offset=%d 0,scale=%f' % ((p+1), (self.args.imargins/2 -self.args.margins/2 if (p%2==0) else self.args.margins/2 - self.args.imargins/2), self.s_page), self.pdf_in))
+
+		tex = file("sig.tex", "w")
+		tex.write('\\documentclass[%s]{article}\n' % docopt)
+		tex.write('\\usepackage{pdfpages}\n')
+		tex.write('\\begin{document}\n')
+		for opt, src in includepdf:
+			tex.write('\\includepdf[%s]{%s}\n' % (opt, src))
+		tex.write('\\end{document}\n')
+		tex.close()
+
+		os.system(texcomp + ' sig.tex')
+
+	def add_guides(self):
+		pi = pyPdf.PdfFileReader(file("sig.pdf", "rb"))
+		po = pyPdf.PdfFileWriter()
+
+		for i in range(pi.getNumPages()):
+			p = pi.getPage(i)
+			if i == 0:
+				if self.args.longarm:
+					grid = pyPdf.PdfFileReader(generate_guides_longarm())
+				else:
+					grid = pyPdf.PdfFileReader(generate_guides(5, self.args.a5, bool(self.args.signature)))
+				p.mergePage(grid.getPage(0))
+			po.addPage(p)
+
+		outputStream = file('sigs.pdf', 'wb')
+		po.write(outputStream)
+		outputStream.close()
+
+	def run(self, args):
+		self.parse_args(args)
+		self.setUp()
+
+		if not self.args.nocrop:
+			self.crop()
+
+		self.build_booklet()
+
+		if not self.args.noguides and not self.args.croponly:
+			self.add_guides()
+			os.system(viewer + ' sigs.pdf')
+		else:
+			os.system(viewer + ' sig.pdf')
+
+		self.tearDown()
+
+if __name__ == '__main__':
+	mkbooklet = Mkbooklet()
+	mkbooklet.run(sys.argv)
