@@ -1,3 +1,4 @@
-index.html
-ins.png
-outs.png
+.env
+*.pyc
+*.swp
+*.egg-info
