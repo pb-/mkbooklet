@@ -1,7 +1,7 @@
 from textwrap import dedent
 
 
-def generate_longargm():
+def generate_longarm():
     width = 1
     content = '2.83464567 0 0 2.83464567 0 0 cm 0.1 w 1 0 0 1 148.5 21 cm\n'
 
@@ -18,7 +18,8 @@ def generate_longargm():
     return content
 
 
-def generate_shortarm(num, a5mode, right):
+def generate_shortarm(a5mode, right):
+    num = 5
     vmargin_mm = 6
     hmargin_mm = 5 if a5mode else 2.5
 
