@@ -1,3 +1,6 @@
+from textwrap import dedent
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+
 import subprocess
 import pyPdf
 import sys
@@ -264,40 +267,62 @@ class Mkbooklet(object):
     a5width = 419
 
     def parse_args(self, args):
-        epilog = (    "Inner and outer margins have the following meanings.\n"
-                    "\n"
-                    "+---------------+\n"
-                    "|###############|\n"
-                    "|#    @@:@@    #|\n"
-                    "|# P1 @@:@@ P2 #|\n"
-                    "|#    @@:@@    #|\n"
-                    "|###############|\n"
-                    "+---------------+\n"
-                    "\n"
-                    "'#' is the outer margin (both dimensions) along the outline of\n"
-                    "    the phyiscal paper.\n"
-                    "'@' is the inner fold margin (horizontally) between the actual\n"
-                    "    content and the center of the paper indicated by ':'.\n")
-        parser = argparse.ArgumentParser(description='Prepare PDF files for booklet printing.',
-            formatter_class=argparse.RawDescriptionHelpFormatter, epilog=epilog)
+        epilog = dedent("""\
+            Inner and outer margins have the following meanings.
 
-        parser.add_argument('--version', action='version', version='%(prog)s 14.10c')
-        parser.add_argument('-5', '--a5', action='store_true', default=False, help='produce single A5 pages instead of 2-up A4')
-        parser.add_argument('-C', '--croponly', action='store_true', default=False, help='only crop the input file, do not create a booklet')
-        parser.add_argument('-S', '--signature', dest='signature', type=int, action='store', default=None, help='use at most given number of sheets for one signature instead of producing one big signature')
-        parser.add_argument('-b', '--bbox', action='store', default=None, help='use given bounding box, specified as either x1,y1,x2,y2 or x,y+w,h')
-        parser.add_argument('-c', '--nocrop', action='store_true', default=False, help='do not crop the input file')
-        parser.add_argument('-e', '--extrapages', dest='epages', default=0, type=int, help='add given number of extra blank pages at the end of the document')
-        parser.add_argument('-g', '--noguides', action='store_true', default=False, help='do not apply any guides on the first page')
-        parser.add_argument('-i', '--inner-margins', dest='imargins', default='default', type=str, help='use given value (unit: millimeters) for the minimal inner (fold)margins, see below')
-        parser.add_argument('-l', '--longarm', action='store_true', default=False, help='generate staple guides for long-arm staplers')
-        parser.add_argument('-o', '--outer-margins', dest='margins', default='default', type=str, help='use given value (unit: millimeters) for the minimal outer margins, see below')
-        parser.add_argument('-p', '--bboxpage', dest='bboxpage', type=int, action='store', default=None, help='use given page only to obtain the bounding box')
-        parser.add_argument('-s', '--smartbbox', action='store_true', default=False, help='use the smart algorithm when obtaining the bbox')
-        parser.add_argument('FILE')
+            +---------------+
+            |###############|
+            |#    @@:@@    #|
+            |# P1 @@:@@ P2 #|
+            |#    @@:@@    #|
+            |###############|
+            +---------------+
+
+            '#' is the outer margin (both dimensions) along the outline of
+                the phyiscal paper.
+            '@' is the inner fold margin (horizontally) between the actual
+                content and the center of the paper indicated by ':'.
+        """)
+
+        parser = ArgumentParser(
+            description='Prepare PDF files for booklet printing.',
+            formatter_class=RawDescriptionHelpFormatter, epilog=epilog)
+
+        a = parser.add_argument
+
+        a('--version', action='version', version='%(prog)s 1.0.0')
+        a('-5', '--a5', action='store_true',
+          help='produce single A5 pages instead of 2-up A4')
+        a('-C', '--croponly', action='store_true',
+          help='only crop the input file, do not create a booklet')
+        a('-S', '--signature', dest='signature', type=int,
+          help='use at most given number of sheets for one signature instead '
+               'of producing one big signature')
+        a('-b', '--bbox', help='use given bounding box, specified as either '
+                               'x1,y1,x2,y2 or x,y+w,h')
+        a('-c', '--nocrop', action='store_true',
+          help='do not crop the input file')
+        a('-e', '--extrapages', dest='epages', default=0, type=int,
+          help='add given number of extra blank pages at '
+               'the end of the document')
+        a('-g', '--noguides', action='store_true',
+          help='do not apply any guides on the first page')
+        a('-i', '--inner-margins', dest='imargins', default='default',
+          type=str, help='use given value (unit: millimeters) for the minimal '
+                         'inner (fold)margins, see below')
+        a('-l', '--longarm', action='store_true',
+          help='generate staple guides for long-arm staplers')
+        a('-o', '--outer-margins', dest='margins', default='default', type=str,
+          help='use given value (unit: millimeters) for the minimal '
+               'outer margins, see below')
+        a('-p', '--bboxpage', dest='bboxpage', type=int,
+          help='use given page number to obtain the bounding box')
+        a('-s', '--smartbbox', action='store_true',
+          help='use the median algorithm when obtaining the bbox')
+        a('filename')
 
         self.args = parser.parse_args()
-        self.pdf_in = os.path.abspath(self.args.FILE)
+        self.pdf_in = os.path.abspath(self.args.filename)
 
         self.args.margins = 6 if self.args.margins == 'default' else int(self.args.margins)
         if self.args.imargins == 'default':
@@ -314,11 +339,11 @@ class Mkbooklet(object):
         self.args.margins = int(round(mmToPt(self.args.margins)))
         self.args.imargins = int(round(mmToPt(self.args.imargins)))
 
-    def setUp(self):
+    def setup_tmpdir(self):
         self.tmpdir = tempfile.mkdtemp(prefix='mkbooklet-')
         os.chdir(self.tmpdir)
 
-    def tearDown(self):
+    def cleanup_tmpdir(self):
         shutil.rmtree(self.tmpdir)
 
     def crop(self):
@@ -451,7 +476,7 @@ class Mkbooklet(object):
 
     def run(self, args):
         self.parse_args(args)
-        self.setUp()
+        self.setup_tmpdir()
 
         if not self.args.nocrop:
             self.crop()
@@ -464,7 +489,7 @@ class Mkbooklet(object):
         else:
             os.system(viewer + ' sig.pdf')
 
-        self.tearDown()
+        self.cleanup_tmpdir()
 
 def run():
     mkbooklet = Mkbooklet()
