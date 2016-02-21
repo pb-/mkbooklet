@@ -1,7 +1,8 @@
 from unittest import TestCase
+
 from mock import patch
 
-from ..boundingbox import median_bbox, extrema_bbox
+from ..boundingbox import extrema_bbox, median_bbox
 
 
 class BoundingboxTest(TestCase):

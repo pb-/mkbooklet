@@ -1,4 +1,4 @@
-from itertools import count, chain, repeat
+from itertools import chain, count, repeat
 
 
 def signature_sequence(pages):

@@ -1,5 +1,5 @@
 from struct import unpack
-from subprocess import Popen, PIPE
+from subprocess import PIPE, Popen
 
 from pyPdf import PdfFileReader
 

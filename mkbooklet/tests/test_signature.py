@@ -2,6 +2,7 @@ from unittest import TestCase
 
 from ..signature import format_signatures_sequence as fmt
 
+
 class SignatureTest(TestCase):
     def test(self):
         self.assertEqual(fmt(1, 1), '{},1,{},{}')
