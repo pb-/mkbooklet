@@ -5,7 +5,7 @@ from pyPdf import PdfFileReader
 
 
 def page_sizes(filename):
-    f = PdfFileReader(file(filename, 'rb'))
+    f = PdfFileReader(open(filename, 'rb'))
 
     for i in range(f.getNumPages()):
         p = f.getPage(i)
