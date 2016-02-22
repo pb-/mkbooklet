@@ -17,8 +17,8 @@ def page_sizes(filename):
 
 def bounding_boxes(filename):
     proc = Popen(
-        ['gs', '-q', '-dBATCH', '-dNOPAUSE', '-sDEVICE=bit',
-         '-sOutputFile=%stdout', filename], stdout=PIPE, shell=True)
+        'gs -q -dBATCH -dNOPAUSE -sDEVICE=bit -sOutputFile=%stdout {}'
+        .format(filename), stdout=PIPE, shell=True)
 
     for width, height in page_sizes(filename):
         bbox = (width - 1, height - 1, 0, 0)
