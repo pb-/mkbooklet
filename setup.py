@@ -9,6 +9,9 @@ setup(
     author_email='pbaecher@gmail.com',
     url='https://github.com/pb-/mkbooklet',
     packages=find_packages('.'),
+    install_requires=[
+        'pyPdf ==1.13',
+    ],
     entry_points={
         'console_scripts': [
             'mkbooklet = mkbooklet.main:run',
