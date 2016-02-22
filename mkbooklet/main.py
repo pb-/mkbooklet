@@ -1,75 +1,21 @@
-from textwrap import dedent
-from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from pyPdf import PdfFileReader, PdfFileWriter
-
-from itertools import cycle
-
-import subprocess
-import pyPdf
-import sys
 import os
 import re
-import tempfile
-import shutil
-import argparse
-import struct
+import sys
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from cStringIO import StringIO
+from itertools import cycle
+from shutil import rmtree
+from tempfile import mkdtemp
+from textwrap import dedent
 
+from pyPdf import PdfFileReader, PdfFileWriter
+
+from .boundingbox import bounding_boxes, extrema_bbox, median_bbox
+from .geometry import (a4lheight_pt, a4lwidth_pt, a5height_pt, a5width_pt,
+                       mm_to_pt)
+from .guides import generate_longarm, generate_shortarm
 from .pdf import create_pdf
-from .guides import generate_shortarm, generate_longarm
-from .geometry import (
-    a4lwidth_pt, a4lheight_pt, a5width_pt, a5height_pt, mm_to_pt)
 from .signature import format_signatures_sequence
-
-
-texcomp = "pdflatex"
-
-##
-# obtain the true bounding box for printed data of the given pdf file.
-#
-def pdfbbox(filename):
-    f = pyPdf.PdfFileReader(open(filename, 'rb'))
-    pages = f.getNumPages()
-
-    sizes = []
-
-    for i in range(pages):
-        p = f.getPage(i)
-        sizes.append((int(round(p.mediaBox.getUpperRight_x() - p.mediaBox.getLowerLeft_x())), int(round(p.mediaBox.getUpperRight_y() - p.mediaBox.getLowerLeft_y()))))
-
-    proc = subprocess.Popen(['/usr/bin/gs', '-q', '-dBATCH', '-dNOPAUSE', '-sDEVICE=bit', '-sOutputFile=%stdout', filename], stdout=subprocess.PIPE)
-
-    bboxs = []
-
-    for s in sizes:
-        (w,h) = s
-        bbox = (w-1, h-1, 0, 0)
-
-        row_len = w / 8
-        if w % 8 > 0:
-            row_len += 1
-
-        fmt = 'b' * row_len
-
-        for y in range(h-1, -1, -1):
-            row = proc.stdout.read(row_len)
-            row = struct.unpack(fmt, row)
-            # use low resolution for x-positions. this is
-            # substantially faster and comes with an error
-            # of at most 8pt \approx 2.8mm
-            for x in range(0, w / 8):
-                if row[x] != 0:
-                    bbox = (
-                        min(bbox[0], x * 8),
-                        min(bbox[1], y),
-                        max(bbox[2], x * 8 + 8),
-                        max(bbox[3], y + 2),
-                    )
-
-        if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
-            bboxs.append(tuple(bbox))
-
-    return bboxs
 
 
 class Mkbooklet(object):
@@ -145,40 +91,36 @@ class Mkbooklet(object):
         self.args.imargins = int(round(mm_to_pt(self.args.imargins)))
 
     def setup_tmpdir(self):
-        self.tmpdir = tempfile.mkdtemp(prefix='mkbooklet-')
+        self.tmpdir = mkdtemp(prefix='mkbooklet-')
         os.chdir(self.tmpdir)
 
     def cleanup_tmpdir(self):
-        shutil.rmtree(self.tmpdir)
+        rmtree(self.tmpdir)
 
     def get_bbox(self):
-        if not self.args.bbox:
-            # determine actual (printed) bounding box
-            bbox = pdfbbox(self.pdf_in)
-
-            if self.args.bboxpage:
-                bbox = bbox[self.args.bboxpage-1]
-            elif self.args.smartbbox:
-                bboxs = [None] * 4
-                for i in range(4):
-                    bboxs[i] = median(map(lambda x: x[i], bbox))
-                bbox = tuple(bboxs)
-            else:
-                bbox = reduce(lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])), bbox)
-        else:
-            # x1,y1,x2,y2
-            # x,y+w,h
+        if self.args.bbox:
+            # x1,y1,x2,y2  or  x,y+w,h
             m = re.match('^(\\d+),(\\d+)(,|\\+)(\\d+),(\\d+)$', self.args.bbox)
             if not m:
-                print 'Invalid bbox format, use x1,y1,x2,y2 or x,y+w,h'
-                self.tearDown()
+                print(
+                    'Invalid bbox format, use x1,y1,x2,y2 or x,y+w,h (all pt)')
+                self.cleanup_tmpdir()
                 sys.exit(-1)
             else:
-                bbox = (int(m.group(1)), int(m.group(2)), int(m.group(4)), int(m.group(5)))
+                bbox = tuple((int(m.group(i)) for i in (1, 2, 4, 5)))
                 if m.group(3) == '+':
-                    bbox = (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
+                    bbox = (
+                        bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
 
-        return bbox
+                return bbox
+        else:
+            # determine actual (printed) bounding box
+            if self.args.bboxpage:
+                return bounding_boxes(self.pdf_in)[self.args.bboxpage - 1]
+            elif self.args.smartbbox:
+                return median_bbox(self.pdf_in)
+            else:
+                return extrema_bbox(self.pdf_in)
 
     def crop(self):
         bbox = self.get_bbox()
@@ -186,13 +128,17 @@ class Mkbooklet(object):
         h = bbox[3] - bbox[1]
 
         if not self.args.a5:
-            maxw = (a4lwidth_pt - self.args.imargins - 4 * self.args.margins) / 2
+            maxw = (
+                a4lwidth_pt - self.args.imargins - 4 * self.args.margins) / 2
             maxh = a4lheight_pt - 2 * self.args.margins
             s = float(maxw) / w
             if s * h > maxh:
-                # exceeds height, scaling will free up more horizontal space. make sure we use this space where it makes sense (i.e., on the folding edge)
+                # exceeds height, scaling will free up more horizontal space.
+                # make sure we use this space where it makes sense (i.e.,
+                # on the folding edge)
                 s = float(maxh) / h
-                self.args.imargins = int(a4lwidth_pt - s * w * 2 - 4 * self.args.margins) 
+                self.args.imargins = int(
+                    a4lwidth_pt - s * w * 2 - 4 * self.args.margins)
 
             sm = int(self.args.margins / s)
             cbox = (bbox[0] - sm, bbox[1] - sm, bbox[2] + sm, bbox[3] + sm)
@@ -202,23 +148,32 @@ class Mkbooklet(object):
                 s_full = float(a5height_pt) / h
 
             self.s_page = 1
-            if s_full * w > a5width_pt - self.args.imargins - self.args.margins:
-                self.s_page = float(a5width_pt - self.args.imargins - self.args.margins) / (s_full * w)
+            if (s_full * w >
+                    a5width_pt - self.args.imargins - self.args.margins):
+                self.s_page = float(
+                    a5width_pt - self.args.imargins - self.args.margins) \
+                    / (s_full * w)
             if self.s_page * s_full * h > a5height_pt - 2 * self.args.margins:
-                self.s_page = float(a5height_pt - 2 * self.args.margins) / (s_full * h)
-                self.args.imargins = int(a5width_pt - self.args.margins - self.s_page * s_full * w)
+                self.s_page = float(
+                    a5height_pt - 2 * self.args.margins) / (s_full * h)
+                self.args.imargins = int(
+                    a5width_pt - self.args.margins - self.s_page * s_full * w)
             cbox = bbox
 
         # crop crop
-        pi = pyPdf.PdfFileReader(open(self.pdf_in, "rb"))
+        pi = PdfFileReader(open(self.pdf_in, "rb"))
         self.pages = pi.getNumPages()
-        po = pyPdf.PdfFileWriter()
+        po = PdfFileWriter()
 
         for i in range(self.pages):
             p = pi.getPage(i)
 
-            p.cropBox.lowerLeft = (cbox[0] + p.mediaBox.lowerLeft[0], cbox[1] + p.mediaBox.lowerLeft[1])
-            p.cropBox.upperRight = (cbox[2] + p.mediaBox.lowerLeft[0], cbox[3] + p.mediaBox.lowerLeft[1])
+            p.cropBox.lowerLeft = (
+                cbox[0] + p.mediaBox.lowerLeft[0],
+                cbox[1] + p.mediaBox.lowerLeft[1])
+            p.cropBox.upperRight = (
+                cbox[2] + p.mediaBox.lowerLeft[0],
+                cbox[3] + p.mediaBox.lowerLeft[1])
 
             p.bleedBox = p.cropBox
             p.trimBox = p.cropBox
@@ -228,13 +183,14 @@ class Mkbooklet(object):
 
         # extra blank pages
         if self.args.epages:
-            bi = pyPdf.PdfFileReader(create_pdf_empty(cbox[2]-cbox[0],cbox[3]-cbox[1]))
+            empty = StringIO()
+            create_pdf(empty, cbox[2] - cbox[0], cbox[3] - cbox[1])
+            bi = PdfFileReader(empty)
             for i in range(self.args.epages):
                 po.addPage(bi.getPage(0))
 
-        outputStream = open('cropped.pdf', 'wb')
-        po.write(outputStream)
-        outputStream.close()
+        with open('cropped.pdf', 'wb') as cropped:
+            po.write(cropped)
 
         self.pdf_in = 'cropped.pdf'
 
@@ -265,16 +221,16 @@ class Mkbooklet(object):
                         ('pages=-,booklet=true,delta=%dpt 0' %
                             self.args.imargins, self.pdf_in)]
 
-        tex = open('sig.tex', 'w')
-        tex.write('\\documentclass[%s]{article}\n' % docopt)
-        tex.write('\\usepackage{pdfpages}\n')
-        tex.write('\\begin{document}\n')
-        for opt, src in includepdf:
-            tex.write('\\includepdf[%s]{%s}\n' % (opt, src))
-        tex.write('\\end{document}\n')
-        tex.close()
+        with open('sig.tex', 'w') as tex:
+            tex.write('\\documentclass[%s]{article}\n' % docopt)
+            tex.write('\\usepackage{pdfpages}\n')
+            tex.write('\\begin{document}\n')
+            for opt, src in includepdf:
+                tex.write('\\includepdf[%s]{%s}\n' % (opt, src))
+            tex.write('\\end{document}\n')
 
-        os.system(texcomp + ' sig.tex')
+        texcomp = os.getenv('MKB_TEXCOMP') or 'pdflatex'
+        os.system('{} sig.tex'.format(texcomp))
 
     def add_guides(self):
         pdf_in = PdfFileReader(open('sig.pdf', 'rb'))
